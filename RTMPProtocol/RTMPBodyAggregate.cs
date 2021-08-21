@@ -1,4 +1,6 @@
-﻿namespace RTMPLibrary
+﻿using System;
+
+namespace RTMPLibrary
 {
     public partial class RTMPBodyAggregate : RTMPBodyBase
     {
@@ -29,8 +31,9 @@
                     break;
 
                 TypeID = Value[OffsetIndex + Index + 0];
-                Size = (int)System.Math.Round(Value[OffsetIndex + Index + 1] * System.Math.Pow(256d, 2d) + Value[OffsetIndex + Index + 2] * 256 + Value[OffsetIndex + Index + 3]);
-                ValidSize = (int)System.Math.Round(Value[OffsetIndex + Index + Size + 11] * System.Math.Pow(256d, 3d) + Value[OffsetIndex + Index + Size + 12] * System.Math.Pow(256d, 2d) + Value[OffsetIndex + Index + Size + 13] * 256 + Value[OffsetIndex + Index + Size + 14]);
+                Size = (int)Math.Round(Value[OffsetIndex + Index + 1] * Math.Pow(256d, 2d) + Value[OffsetIndex + Index + 2] * 256 + Value[OffsetIndex + Index + 3]);
+
+                ValidSize = (int)Common.GetUInt(Value, OffsetIndex + Index + Size + 11); // (int)Math.Round(Value[OffsetIndex + Index + Size + 11] * Math.Pow(256d, 3d) + Value[OffsetIndex + Index + Size + 12] * Math.Pow(256d, 2d) + Value[OffsetIndex + Index + Size + 13] * 256 + Value[OffsetIndex + Index + Size + 14]);
                 if (ValidSize == Size)
                 {
                     Msg = new AggregateMessage();
@@ -89,18 +92,18 @@
                 RetValue[0] = (byte)TypeID;
 
                 for (int I = 0; I <= 3; I++)
-                    RetValue[I + 1] = (byte)((long)System.Math.Round(BodyLength % System.Math.Pow(256d, 3 - I + 1)) / (long)System.Math.Round(System.Math.Pow(256d, 3 - I)));
+                    RetValue[I + 1] = (byte)((long)Math.Round(BodyLength % Math.Pow(256d, 3 - I + 1)) / (long)Math.Round(Math.Pow(256d, 3 - I)));
 
                 for (int I = 0; I <= 4; I++)
-                    RetValue[I + BodyLength + 11] = (byte)((long)System.Math.Round(BodyLength % System.Math.Pow(256d, 4 - I + 1)) / (long)System.Math.Round(System.Math.Pow(256d, 4 - I)));
+                    RetValue[I + BodyLength + 11] = (byte)((long)Math.Round(BodyLength % Math.Pow(256d, 4 - I + 1)) / (long)Math.Round(Math.Pow(256d, 4 - I)));
 
                 for (int I = 0; I <= 3; I++)
-                    RetValue[I + 4] = (byte)((long)System.Math.Round(Timestamp % System.Math.Pow(256d, 3 - I + 1)) / (long)System.Math.Round(System.Math.Pow(256d, 3 - I)));
+                    RetValue[I + 4] = (byte)((long)Math.Round(Timestamp % Math.Pow(256d, 3 - I + 1)) / (long)Math.Round(Math.Pow(256d, 3 - I)));
 
                 RetValue[7] = (byte)TimeExtended;
 
                 for (int I = 0; I <= 3; I++)
-                    RetValue[I + 8] = (byte)((long)System.Math.Round(StreamID % System.Math.Pow(256d, 3 - I + 1)) / (long)System.Math.Round(System.Math.Pow(256d, 3 - I)));
+                    RetValue[I + 8] = (byte)((long)Math.Round(StreamID % Math.Pow(256d, 3 - I + 1)) / (long)Math.Round(Math.Pow(256d, 3 - I)));
 
                 System.Array.Copy(Body, BodyOffset, RetValue, 11, BodyLength);
 

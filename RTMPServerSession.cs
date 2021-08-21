@@ -7,54 +7,7 @@ namespace RTMPLibrary
 {
     public partial class RTMPServerSession : IDisposable
     {
-        private RTMPSocketContaxtInterface _iTCP;
-
-        public RTMPServerSession(RTMPSocketContaxtInterface TCP, byte[] LeakBuffer)
-        {
-            iHandshake = new RTMPHandshake(iServerVersion);
-            ResetStatus();
-
-            if (LeakBuffer != null)
-            {
-                if (LeakBuffer.Length > 0)
-                {
-                    try { iRecvBuffer.AddRange(LeakBuffer); }
-                    catch (Exception ex) { }
-                }
-            }
-
-            LastUpdateDate = System.DateTime.Now;
-            iTCP = TCP;
-            ProcessRecvBuffer();
-        }
-
-        private RTMPSocketContaxtInterface iTCP
-        {
-            [MethodImpl(MethodImplOptions.Synchronized)]
-            get
-            {
-                return _iTCP;
-            }
-
-            [MethodImpl(MethodImplOptions.Synchronized)]
-            set
-            {
-                if (_iTCP != null)
-                {
-                    _iTCP.DataReceived -= iTCP_DataReceived;
-                    _iTCP.Disconnect -= iTCP_Disconnect;
-                    _iTCP.FlushBuffer -= iTCP_FlushBuffer;
-                }
-
-                _iTCP = value;
-                if (_iTCP != null)
-                {
-                    _iTCP.DataReceived += iTCP_DataReceived;
-                    _iTCP.Disconnect += iTCP_Disconnect;
-                    _iTCP.FlushBuffer += iTCP_FlushBuffer;
-                }
-            }
-        }
+        private RTMPSocketContaxtInterface iTCP;
 
         public enum enumVideoPrivateType
         {
@@ -346,6 +299,20 @@ namespace RTMPLibrary
             }
         }
 
+        public RTMPServerSession(RTMPSocketContaxtInterface TCP)
+        {
+            ResetStatus();
+
+            LastUpdateDate = System.DateTime.Now;
+
+            iTCP = TCP;
+            iTCP.DataReceived += iTCP_DataReceived;
+            iTCP.Disconnect += iTCP_Disconnect;
+            iTCP.FlushBuffer += iTCP_FlushBuffer;
+
+            ProcessRecvBuffer();
+        }
+
         public void Close()
         {
             ResetStatus();
@@ -353,6 +320,10 @@ namespace RTMPLibrary
             {
                 LastUpdateDate = System.DateTime.Now;
                 iTCP.Close();
+
+                iTCP.DataReceived -= iTCP_DataReceived;
+                iTCP.Disconnect -= iTCP_Disconnect;
+                iTCP.FlushBuffer -= iTCP_FlushBuffer;
             }
 
             iTCP = null;
@@ -841,7 +812,7 @@ namespace RTMPLibrary
                         try { iTCP.Close(); }
                         catch (Exception ex) { }
 
-                        iTCP = default;
+                        iTCP = null;
                     }
 
                     iSPSContent = null;

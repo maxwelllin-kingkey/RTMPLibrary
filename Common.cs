@@ -1,4 +1,6 @@
-﻿public partial class Common
+﻿using System;
+
+public partial class Common
 {
     public enum enumHandshakeType
     {
@@ -119,5 +121,12 @@
         }
 
         return RetValue;
+    }
+
+    public static uint GetUInt(byte[] arr, int offset) { 
+        return Convert.ToUInt32(arr[offset] * Math.Pow(256, 3) + 
+                arr[offset + 1] * Math.Pow(256, 2) + 
+                arr[offset + 2] * 256 + 
+                arr[offset + 3]);
     }
 }
