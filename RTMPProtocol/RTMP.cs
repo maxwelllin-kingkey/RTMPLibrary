@@ -224,69 +224,50 @@
 
                 switch (Head.TypeID)
                 {
-                    case var @case when @case == RTMPHead.enumTypeID.AMF0Command:
-                        {
-                            Body = new RTMPBodyAMFBase(BodyValue, 0);
-                            break;
-                        }
+                    case RTMPHead.enumTypeID.AMF0Command:
+                        Body = new AMFCommand.AMFCommandBody(BodyValue, 0);
 
-                    case var case1 when case1 == RTMPHead.enumTypeID.AMF0Data:
-                        {
-                            Body = new RTMPBodyAMFBase(BodyValue, 0);
-                            break;
-                        }
+                        break;
+                    case RTMPHead.enumTypeID.AMF0Data:
+                        Body = new AMFCommand.AMFCommandBody(BodyValue, 0);
 
-                    case var case2 when case2 == RTMPHead.enumTypeID.AMF3Command:
-                        {
-                            Body = new RTMPBodyAMFBase(BodyValue, 1);
-                            break;
-                        }
+                        break;
+                    case RTMPHead.enumTypeID.AMF3Command:
+                        Body = new AMFCommand.AMFCommandBody(BodyValue, 1);
 
-                    case var case3 when case3 == RTMPHead.enumTypeID.SetPeerBandwidth:
-                        {
-                            Body = new RTMPBodyPeerBandwidth(BodyValue, 0);
-                            break;
-                        }
+                        break;
+                    case RTMPHead.enumTypeID.SetPeerBandwidth:
+                        Body = new RTMPBodyPeerBandwidth(BodyValue, 0);
 
-                    case var case4 when case4 == RTMPHead.enumTypeID.SetWindowSize:
-                        {
-                            Body = new RTMPBodyWindowSize(BodyValue, 0);
-                            break;
-                        }
+                        break;
+                    case RTMPHead.enumTypeID.SetWindowSize:
+                        Body = new RTMPBodyWindowSize(BodyValue, 0);
 
-                    case var case5 when case5 == RTMPHead.enumTypeID.SetChunkSize:
-                        {
-                            Body = new RTMPBodyChunkSize(BodyValue, 0);
-                            break;
-                        }
+                        break;
+                    case RTMPHead.enumTypeID.SetChunkSize:
+                        Body = new RTMPBodyChunkSize(BodyValue, 0);
 
-                    case var case6 when case6 == RTMPHead.enumTypeID.VideoData:
-                        {
-                            if (Head.BodySize > 5)
-                            {
-                                Body = new RTMPBodyVideoData(BodyValue, 0, Head.BodySize);
-                            }
+                        break;
+                    case RTMPHead.enumTypeID.VideoData:
+                        if (Head.BodySize > 5)
+                            Body = new RTMPBodyVideoData(BodyValue, 0, Head.BodySize);
 
-                            break;
-                        }
+                        break;
+                    case RTMPHead.enumTypeID.UserControlMsg:
+                        Body = UCM.UCMBase.ParseUCM(BodyValue, 0);
 
-                    case var case7 when case7 == RTMPHead.enumTypeID.UserControlMsg:
-                        {
-                            Body = RTMPBodyUCMBase.ParseUCM(BodyValue, 0);
-                            break;
-                        }
+                        break;
+                    case RTMPHead.enumTypeID.Aggregate:
+                        Body = new RTMPBodyAggregate(BodyValue, 0, Head.BodySize);
 
-                    case var case8 when case8 == RTMPHead.enumTypeID.Aggregate:
-                        {
-                            Body = new RTMPBodyAggregate(BodyValue, 0, Head.BodySize);
-                            break;
-                        }
-                        // Case Else
-                        // Throw New Exception("Unknow TypeID:" & Head.TypeID)
+                        break;
+                    default:
+                        throw new System.Exception("Unknow TypeID:" + Head.TypeID);
                 }
 
                 RetValue = new RTMP(Head, Body);
-                if (TmpHead.FmtType == RTMPHead.enumFmtType.Type2 | TmpHead.FmtType == RTMPHead.enumFmtType.Type3)
+
+                if ((TmpHead.FmtType == RTMPHead.enumFmtType.Type2) || (TmpHead.FmtType == RTMPHead.enumFmtType.Type3))
                 {
                     RetValue.IsFmtType2 = true;
                 }

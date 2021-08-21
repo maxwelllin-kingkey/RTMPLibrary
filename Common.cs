@@ -56,98 +56,66 @@
     // pageUrl
     // objectEncoding
 
-    public static AMF0InheritsBase ParsingAMF0(byte[] Value, int OffsetIndex, ref int ParsingLength)
+    public static RTMPLibrary.AMF0Objects.AMF0InheritsBase ParsingAMF0(byte[] Value, int OffsetIndex, ref int ParsingLength)
     {
-        enumAMF0ObjectType AMF0Type = default;
-        AMF0InheritsBase RetValue = default;
+        enumAMF0ObjectType AMF0Type;
+        RTMPLibrary.AMF0Objects.AMF0InheritsBase RetValue = null;
+
         AMF0Type = (enumAMF0ObjectType)Value[OffsetIndex];
         switch (AMF0Type)
         {
             case enumAMF0ObjectType.String:
-                {
-                    int Length = Value[OffsetIndex + 1] * 256 + Value[OffsetIndex + 2];
-                    RetValue = new AMF0String(Value, OffsetIndex);
-                    ParsingLength = 3 + Length;
-                    break;
-                }
+                int StrLength = Value[OffsetIndex + 1] * 256 + Value[OffsetIndex + 2];
 
+                RetValue = new RTMPLibrary.AMF0Objects.AMF0String(Value, OffsetIndex);
+                ParsingLength = 3 + StrLength;
+
+                break;
             case enumAMF0ObjectType.Number:
-                {
-                    RetValue = new AMF0Number(Value, OffsetIndex);
-                    ParsingLength = 9;
-                    break;
-                }
+                RetValue = new RTMPLibrary.AMF0Objects.AMF0Number(Value, OffsetIndex);
+                ParsingLength = 9;
 
+                break;
             case enumAMF0ObjectType.Boolean:
-                {
-                    RetValue = new AMF0Boolean(Value, OffsetIndex);
-                    ParsingLength = 2;
-                    break;
-                }
+                RetValue = new RTMPLibrary.AMF0Objects.AMF0Boolean(Value, OffsetIndex);
+                ParsingLength = 2;
 
+                break;
             case enumAMF0ObjectType.Object:
             case enumAMF0ObjectType.Null:
-                {
-                    var Length = default(int);
-                    RetValue = new AMF0Object(Value, OffsetIndex, Length);
-                    ParsingLength = Length;
-                    break;
-                }
+                int NullLength = 0;
 
+                RetValue = new RTMPLibrary.AMF0Objects.AMF0Object(Value, OffsetIndex, ref NullLength);
+                ParsingLength = NullLength;
+
+                break;
             case enumAMF0ObjectType.EMCAArray:
             case enumAMF0ObjectType.StrictArray:
-                {
-                    // find 0 0 9
-                    // byte: 1, 2, 3, 4: EMCA array length, ignore
-                    int SubOffsetIndex = 5;
-                    for (int _Loop = 1; _Loop <= 1000; _Loop++)
+                // find 0 0 9
+                // byte: 1, 2, 3, 4: EMCA array length, ignore
+                int SubOffsetIndex = 5;
+
+                while (true) {
+                    if (Value[OffsetIndex + SubOffsetIndex + 0] == 0 & Value[OffsetIndex + SubOffsetIndex + 1] == 0 & Value[OffsetIndex + SubOffsetIndex + 2] == 9)
                     {
-                        if (Value[OffsetIndex + SubOffsetIndex + 0] == 0 & Value[OffsetIndex + SubOffsetIndex + 1] == 0 & Value[OffsetIndex + SubOffsetIndex + 2] == 9)
-                        {
-                            ParsingLength = SubOffsetIndex + 3;
-                            break;
-                        }
-                        else
-                        {
-                            AMF0Object.ObjectProperty OP = default;
-                            var pLength = default(int);
-                            OP = AMF0Object.ObjectProperty.ParseFromArray(Value, OffsetIndex + SubOffsetIndex, pLength);
-                            SubOffsetIndex += pLength;
-                        }
-
-                        // Do
-                        // Dim AMF0 As AMF0InheritsBase
-                        // Dim pLength As Integer
-
-                        // If Value(OffsetIndex + SubOffsetIndex + 0) = 0 And
-                        // Value(OffsetIndex + SubOffsetIndex + 1) = 0 And
-                        // Value(OffsetIndex + SubOffsetIndex + 2) = 9 Then
-                        // ParsingLength = SubOffsetIndex + 3
-                        // Else
-                        // AMF0 = ParsingAMF0(Value, OffsetIndex + SubOffsetIndex, pLength)
-
-                        // SubOffsetIndex += pLength
-                        // End If
-                        // Loop
-                        // For I As Integer = OffsetIndex To Value.Length - 3
-                        // If Value(I + 0) = 0 And
-                        // Value(I + 1) = 0 And
-                        // Value(I + 2) = 9 Then
-                        // ParsingLength = (I + 3) - OffsetIndex
-                        // Exit For
-                        // End If
-                        // Next
+                        ParsingLength = SubOffsetIndex + 3;
+                        break;
                     }
+                    else
+                    {
+                        RTMPLibrary.AMF0Objects.AMF0Object.ObjectProperty OP = null;
+                        int pLength = 0;
 
-                    break;
+                        OP = RTMPLibrary.AMF0Objects.AMF0Object.ObjectProperty.ParseFromArray(Value, OffsetIndex + SubOffsetIndex, ref pLength);
+                        SubOffsetIndex += pLength;
+                    }
                 }
 
+                break;
             default:
-                {
-                    // unknow
-                    ParsingLength = 1;
-                    break;
-                }
+                // unknow
+                ParsingLength = 1;
+                break;
         }
 
         return RetValue;
