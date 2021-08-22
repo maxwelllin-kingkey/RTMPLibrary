@@ -92,26 +92,17 @@ public partial class Common
 
                 break;
             case enumAMF0ObjectType.EMCAArray:
+                int EMCAArrayLength = 0;
+
+                RetValue = new RTMPLibrary.AMF0Objects.AMF0EMCAArray(Value, OffsetIndex, ref EMCAArrayLength);
+                ParsingLength = EMCAArrayLength;
+
+                break;
             case enumAMF0ObjectType.StrictArray:
-                // find 0 0 9
-                // byte: 1, 2, 3, 4: EMCA array length, ignore
-                int SubOffsetIndex = 5;
+                int ArrayLength = 0;
 
-                while (true) {
-                    if (Value[OffsetIndex + SubOffsetIndex + 0] == 0 & Value[OffsetIndex + SubOffsetIndex + 1] == 0 & Value[OffsetIndex + SubOffsetIndex + 2] == 9)
-                    {
-                        ParsingLength = SubOffsetIndex + 3;
-                        break;
-                    }
-                    else
-                    {
-                        RTMPLibrary.AMF0Objects.AMF0Object.ObjectProperty OP = null;
-                        int pLength = 0;
-
-                        OP = RTMPLibrary.AMF0Objects.AMF0Object.ObjectProperty.ParseFromArray(Value, OffsetIndex + SubOffsetIndex, ref pLength);
-                        SubOffsetIndex += pLength;
-                    }
-                }
+                RetValue = new RTMPLibrary.AMF0Objects.AMF0StrictArray(Value, OffsetIndex, ref ArrayLength);
+                ParsingLength = ArrayLength;
 
                 break;
             default:

@@ -97,11 +97,14 @@
                         {
                             if (BodySize % ChunkSize == 0)
                             {
-                                ChunkCount = BodySize / ChunkSize - 1;
+                                if ((BodySize / ChunkSize) != 0)
+                                    ChunkCount = BodySize / ChunkSize - 1;
+                                else
+                                    ChunkCount = 0;
                             }
                             else
                             {
-                                ChunkCount = BodySize / ChunkSize;
+                                ChunkCount = (BodySize / ChunkSize);
                             }
                         }
                         else
@@ -251,6 +254,10 @@
                     case RTMPHead.enumTypeID.VideoData:
                         if (Head.BodySize > 5)
                             Body = new RTMPBodyVideoData(BodyValue, 0, Head.BodySize);
+
+                        break;
+                    case RTMPHead.enumTypeID.AudioData:
+                        Body = new RTMPBodyAudioData(BodyValue, 0, Head.BodySize);
 
                         break;
                     case RTMPHead.enumTypeID.UserControlMsg:

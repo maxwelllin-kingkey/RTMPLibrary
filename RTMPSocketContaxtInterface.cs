@@ -12,17 +12,17 @@
 
         public void RaiseFlushBuffer()
         {
-            FlushBuffer.Invoke(this);
+            FlushBuffer?.Invoke(this);
         }
 
         public void RaiseDataReceived(int recvCount)
         {
-            DataReceived.Invoke(this, recvCount);
+            DataReceived?.Invoke(this, recvCount);
         }
 
         public void RaiseDisconnect()
         {
-            Disconnect.Invoke(this);
+            Disconnect?.Invoke(this);
         }
 
         public delegate void FlushBufferEventHandler(RTMPSocketContaxtInterface sender);

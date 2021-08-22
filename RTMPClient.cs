@@ -47,6 +47,15 @@ namespace RTMPLibrary
         public delegate void HandshakeCompletedEventHandler(RTMPClient sender);
         public event HandshakeCompletedEventHandler HandshakeCompleted;
 
+        public delegate void OnCommandStatusEventHandler(RTMPClient sender, string Code, AMFCommand.onStatusResult Status);
+        public event OnCommandStatusEventHandler OnCommandStatus;
+
+        public delegate void OnDataStatusEventHandler(RTMPClient sender, string Code, AMFData.onStatusResult Status);
+        public event OnDataStatusEventHandler OnDataStatus;
+
+        public delegate void OnMetaDataEventHandler(RTMPClient sender, AMFCommand.onMetaData MetaData);
+        public event OnMetaDataEventHandler OnMetaData;
+
         public delegate void VideoDataEventHandler(RTMPClient sender, uint TimeDelta, RTMPBodyVideoData VD);
         public event VideoDataEventHandler VideoData;
 
@@ -328,18 +337,19 @@ namespace RTMPLibrary
                             TotalCount = iRTMP.IsDataAvailable(iBuffer.InternalBuffer, iBuffer.Count, iChunkSize, ref NeedPacketSize);
                             if (TotalCount != -1)
                             {
-                                RTMP ServerR = default;
-                                try
+                                RTMP ServerR = null;
+
+                                //try
                                 {
                                     ServerR = iRTMP.ParsingFromArray(iBuffer.InternalBuffer, iBuffer.Count, iChunkSize);
                                 }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine("Invalid packet:" + ex.Message);
-                                    iBuffer.Clear();
-                                    BufferProcessed = true;
-                                    break;
-                                }
+                                //catch (Exception ex)
+                                //{
+                                //    Console.WriteLine("Invalid packet:" + ex.Message);
+                                //    iBuffer.Clear();
+                                //    BufferProcessed = true;
+                                //    break;
+                                //}
 
                                 // If ServerR.Head.TypeID = RTMPHead.enumTypeID.UserControlMsg And
                                 // ServerR.Head.FmtType = RTMPHead.enumFmtType.Type0 And
@@ -436,7 +446,7 @@ namespace RTMPLibrary
 
                                                                     if (VideoBody != null)
                                                                     {
-                                                                        VideoData.Invoke(this, (uint)DelayTimerMS, VideoBody);
+                                                                            VideoData?.Invoke(this, (uint)DelayTimerMS, VideoBody);
                                                                     }
 
                                                                     // If DelayTimerMS < 25 Then Stop
@@ -506,7 +516,7 @@ namespace RTMPLibrary
                                                     {
                                                         // Console.WriteLine("VideoData TimeDelta:" & TimeDelta & ", CompositionTime:" & VideoBody.CompositionTime)
                                                         // RaiseEvent VideoData(Me, TimeDelta, ServerR.Body)
-                                                        VideoData?.Invoke(this, TimeDelta, VideoBody);
+                                                            VideoData?.Invoke(this, TimeDelta, VideoBody);
                                                         // RaiseEvent VideoData(Me, 0, ServerR.Body)
                                                     }
 
@@ -547,7 +557,41 @@ namespace RTMPLibrary
                                                     case enumRTMPConnectState.BeginStream:
                                                     case enumRTMPConnectState.GetPlayResult:
                                                         // 可能會有 onMetaData
-                                                        AMFCommand.onMetaData MetaBody = new AMFCommand.onMetaData((AMFCommand.AMFCommandBody)ServerR.Body);
+                                                        AMFCommand.AMFCommandBody AMFBody = (AMFCommand.AMFCommandBody)ServerR.Body;
+                                                        if (AMFBody.AMF0List.Count > 0)
+                                                        {
+                                                            if (AMFBody.AMF0List[0].ObjectType == Common.enumAMF0ObjectType.String)
+                                                            {
+                                                                AMF0Objects.AMF0String AMFCode = (AMF0Objects.AMF0String)AMFBody.AMF0List[0];
+
+                                                                if (AMFCode.Value.ToUpper() == "onStatus".ToUpper())
+                                                                {
+                                                                    AMFData.onStatusResult AMFStatus = new AMFData.onStatusResult((AMFCommand.AMFCommandBody)ServerR.Body);
+                                                                    AMF0Objects.AMF0String AMFStringCode = null;
+
+                                                                    AMFStringCode = (AMF0Objects.AMF0String)AMFStatus.Information.GetValue("code");
+                                                                    if (AMFStringCode != null)
+                                                                    {
+                                                                        OnDataStatus?.Invoke(this, AMFStringCode.Value, AMFStatus);
+                                                                    }
+                                                                }
+                                                                else if (AMFCode.Value.ToUpper() == "onMetaData".ToUpper())
+                                                                {
+                                                                    AMFCommand.onMetaData MetaBody = new AMFCommand.onMetaData((AMFCommand.AMFCommandBody)ServerR.Body);
+
+                                                                    OnMetaData?.Invoke(this, MetaBody);
+                                                                }
+                                                                else
+                                                                {
+                                                                    // other event or message
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                // other variable
+                                                            }
+                                                        }
+
                                                         break;
                                                 }
 
@@ -566,16 +610,17 @@ namespace RTMPLibrary
                                                             if (AMFString.Value.ToUpper().Contains("Success".ToUpper()))
                                                             {
                                                                 iConnectState = enumRTMPConnectState.GetConnectResult;
-                                                                HandshakeCompleted.Invoke(this);
+
+                                                                    HandshakeCompleted?.Invoke(this);
                                                             }
                                                             else
                                                             {
-                                                                HandshakeFail.Invoke(this);
+                                                                    HandshakeFail?.Invoke(this);
                                                             }
                                                         }
                                                         else
                                                         {
-                                                            HandshakeFail.Invoke(this);
+                                                                HandshakeFail?.Invoke(this);
                                                         }
 
                                                         break;
@@ -591,12 +636,12 @@ namespace RTMPLibrary
                                                             }
                                                             else
                                                             {
-                                                                HandshakeFail?.Invoke(this);
+                                                                    HandshakeFail?.Invoke(this);
                                                             }
                                                         }
                                                         else
                                                         {
-                                                            HandshakeFail?.Invoke(this);
+                                                                HandshakeFail?.Invoke(this);
                                                         }
 
                                                         break;
@@ -609,8 +654,11 @@ namespace RTMPLibrary
                                                             AMF0Objects.AMF0String AMFStringCode = null;
 
                                                             AMFStringCode = (AMF0Objects.AMF0String)PlayResult.Information.GetValue("code");
+
                                                             if (AMFStringCode != null)
                                                             {
+                                                                OnCommandStatus?.Invoke(this, AMFStringCode.Value, PlayResult);
+
                                                                 if (AMFStringCode.Value.ToUpper().Contains("Play.Start".ToUpper()))
                                                                 {
                                                                     if (iBeginStreamReceived == false)
@@ -624,17 +672,54 @@ namespace RTMPLibrary
                                                                 }
                                                                 else
                                                                 {
-                                                                    HandshakeFail.Invoke(this);
+                                                                    // other event
                                                                 }
                                                             }
                                                             else
                                                             {
-                                                                HandshakeFail.Invoke(this);
+                                                                HandshakeFail?.Invoke(this);
                                                             }
                                                         }
                                                         else
                                                         {
-                                                            HandshakeFail.Invoke(this);
+                                                            HandshakeFail?.Invoke(this);
+                                                        }
+
+                                                        break;
+                                                    default:
+                                                        AMFCommand.AMFCommandBody AMFBody = (AMFCommand.AMFCommandBody)ServerR.Body;
+
+                                                        if (AMFBody.AMF0List.Count > 0) {
+                                                            if (AMFBody.AMF0List[0].ObjectType == Common.enumAMF0ObjectType.String)
+                                                            {
+                                                                AMF0Objects.AMF0String AMFCode = (AMF0Objects.AMF0String)AMFBody.AMF0List[0];
+
+                                                                if (AMFCode.Value.ToUpper() == "onStatus".ToUpper())
+                                                                {
+                                                                    AMFCommand.onStatusResult AMFStatus = new AMFCommand.onStatusResult((AMFCommand.AMFCommandBody)ServerR.Body);
+                                                                    AMF0Objects.AMF0String AMFStringCode = null;
+
+                                                                    AMFStringCode = (AMF0Objects.AMF0String)AMFStatus.Information.GetValue("code");
+                                                                    if (AMFStringCode != null)
+                                                                    {
+                                                                        OnCommandStatus?.Invoke(this, AMFStringCode.Value, AMFStatus);
+                                                                    }
+                                                                }
+                                                                else if (AMFCode.Value.ToUpper() == "onMetaData".ToUpper())
+                                                                {
+                                                                    AMFCommand.onMetaData MetaBody = new AMFCommand.onMetaData((AMFCommand.AMFCommandBody)ServerR.Body);
+
+                                                                    OnMetaData?.Invoke(this, MetaBody);
+                                                                }
+                                                                else
+                                                                {
+                                                                    // other event or message
+                                                                }
+                                                            }
+                                                            else
+                                                            { 
+                                                                // other variable
+                                                            }
                                                         }
 
                                                         break;
@@ -642,7 +727,7 @@ namespace RTMPLibrary
 
                                                 break;
                                             default:
-                                                Console.WriteLine("Invalid ID");
+                                                Console.WriteLine("Invalid ID:" + ServerR.Head.TypeID);
 
                                                 break;
                                         }
@@ -785,7 +870,7 @@ namespace RTMPLibrary
 
         private void iTCP_Disconnect(TCPSocket sender)
         {
-            Disconnect.Invoke(this);
+            Disconnect?.Invoke(this);
         }
 
         #region IDisposable Support

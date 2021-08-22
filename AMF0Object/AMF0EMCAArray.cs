@@ -1,8 +1,11 @@
-﻿namespace RTMPLibrary.AMF0Objects
+﻿using System;
+
+namespace RTMPLibrary.AMF0Objects
 {
-    public partial class AMF0Object : AMF0InheritsBase
+    public partial class AMF0EMCAArray : AMF0InheritsBase
     {
         public System.Collections.Generic.List<ObjectProperty> Properties = new System.Collections.Generic.List<ObjectProperty>();
+        private string iArrayName;
 
         public void AddToProperties(string Name, AMF0InheritsBase AMF0)
         {
@@ -101,21 +104,25 @@
             return RetValue;
         }
 
-        public AMF0Object() : base(Common.enumAMF0ObjectType.Object)
+        public AMF0EMCAArray() : base(Common.enumAMF0ObjectType.EMCAArray)
         {
         }
 
-        public AMF0Object(byte[] Value, int OffsetIndex, ref int ParsingLength) : base(Value, OffsetIndex)
+        public AMF0EMCAArray(byte[] Value, int OffsetIndex, ref int ParsingLength) : base(Value, OffsetIndex)
         {
-            if (base.ObjectType == Common.enumAMF0ObjectType.Object)
+            if (base.ObjectType == Common.enumAMF0ObjectType.EMCAArray)
             {
                 int TotalParsingLength = 0;
+                int ArrayLength = 0;
 
                 OffsetIndex += 1;
+                ArrayLength = (int)Common.GetUInt(Value, OffsetIndex);
 
-                while (true)
+                OffsetIndex += 4;
+
+                while(true)
                 {
-                    if ((Value[OffsetIndex] == 0) && (Value[OffsetIndex + 1] == 0) && (Value[OffsetIndex + 2] == 9))
+                    if (Value[OffsetIndex] == 0 & Value[OffsetIndex + 1] == 0 & Value[OffsetIndex + 2] == 9)
                     {
                         break;
                     }
@@ -132,7 +139,7 @@
                     }
                 }
 
-                ParsingLength = TotalParsingLength + 4;
+                ParsingLength = TotalParsingLength + 8;
             }
             else if (base.ObjectType == Common.enumAMF0ObjectType.Null)
             {
@@ -145,20 +152,17 @@
         {
             System.Collections.Generic.List<byte> RetValue = new System.Collections.Generic.List<byte>();
 
+            RetValue.Add((byte)Common.enumAMF0ObjectType.EMCAArray);
+
+            RetValue.AddRange(new byte[] { 0, 0, 0, 0 });
+
             if (Properties.Count > 0)
             {
-                RetValue.Add((byte)Common.enumAMF0ObjectType.Object);
-
                 foreach (ObjectProperty EachOP in Properties)
                     RetValue.AddRange(EachOP.ToByteArray());
+            }
 
-                RetValue.AddRange(new byte[] { 0, 0, 9 });
-            }
-            else
-            {
-                // set object is null
-                RetValue.Add((byte)Common.enumAMF0ObjectType.Null);
-            }
+            RetValue.AddRange(new byte[] { 0, 0, 9 });
 
             return RetValue.ToArray();
         }

@@ -468,11 +468,11 @@ namespace RTMPLibrary
 
                                                     if (StreamName != null)
                                                     {
-                                                        RTMPCommandConnect.Invoke(this, ConnectBody, StreamName.Value);
+                                                        RTMPCommandConnect?.Invoke(this, ConnectBody, StreamName.Value);
                                                     }
                                                     else
                                                     {
-                                                        RTMPCommandConnect.Invoke(this, ConnectBody, string.Empty);
+                                                        RTMPCommandConnect?.Invoke(this, ConnectBody, string.Empty);
                                                     }
                                                     // Else
                                                     // RaiseEvent HandshakeException(Me)
@@ -491,7 +491,7 @@ namespace RTMPLibrary
                                                     iClientTransactionID = Convert.ToInt32(CreateStreamBody.TransactionID.Value);
                                                     iConnectionState = enumConnectionState.CreateStream;
 
-                                                    RTMPCommandCreateStream.Invoke(this, CreateStreamBody);
+                                                    RTMPCommandCreateStream?.Invoke(this, CreateStreamBody);
                                                 }
 
                                                 break;
@@ -514,13 +514,9 @@ namespace RTMPLibrary
                                                             iConnectionState = enumConnectionState.Play;
 
                                                             if (PlayBody.StreamName != null)
-                                                            {
-                                                                RTMPCommandPlay.Invoke(this, PlayBody, PlayBody.StreamName.Value);
-                                                            }
+                                                                RTMPCommandPlay?.Invoke(this, PlayBody, PlayBody.StreamName.Value);
                                                             else
-                                                            {
-                                                                RTMPCommandPlay.Invoke(this, PlayBody, string.Empty);
-                                                            }
+                                                                RTMPCommandPlay?.Invoke(this, PlayBody, string.Empty);
                                                         }
                                                     }
                                                 }
@@ -534,7 +530,7 @@ namespace RTMPLibrary
                                     case RTMPHead.enumTypeID.AMF0Data:
                                         break;
                                     default:
-                                        RTMPMessage.Invoke(this, ClientR.Head, ClientR.Body);
+                                        RTMPMessage?.Invoke(this, ClientR.Head, ClientR.Body);
 
                                         break;
                                 }
@@ -787,7 +783,7 @@ namespace RTMPLibrary
         private void iTCP_Disconnect(RTMPSocketContaxtInterface sender)
         {
             LastUpdateDate = System.DateTime.Now;
-            Disconnect.Invoke(this);
+            Disconnect?.Invoke(this);
         }
 
         private void iTCP_FlushBuffer(RTMPSocketContaxtInterface sender)

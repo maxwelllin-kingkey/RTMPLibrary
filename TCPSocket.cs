@@ -147,24 +147,21 @@ namespace RTMPLibrary
                     {
                         if (iSocket.Connected)
                         {
-                            Connected.Invoke(this);
+                            Connected?.Invoke(this);
                         }
                         else
                         {
                             isClosed = true;
-                            Disconnect.Invoke(this);
+                            Disconnect?.Invoke(this);
                         }
                     }
                     else
                     {
                         isClosed = true;
-                        Disconnect.Invoke(this);
+                        Disconnect?.Invoke(this);
                     }
 
-                    if (iConnectedAsyncCB != null)
-                    {
-                        iConnectedAsyncCB.Invoke();
-                    }
+                    iConnectedAsyncCB?.Invoke();
                 }, null);
             }
             else
@@ -187,24 +184,21 @@ namespace RTMPLibrary
                     {
                         if (iSocket.Connected)
                         {
-                            Connected.Invoke(this);
+                            Connected?.Invoke(this);
                         }
                         else
                         {
                             isClosed = true;
-                            Disconnect.Invoke(this);
+                            Disconnect?.Invoke(this);
                         }
                     }
                     else
                     {
                         isClosed = true;
-                        Disconnect.Invoke(this);
+                        Disconnect?.Invoke(this);
                     }
 
-                    if (iConnectedAsyncCB != null)
-                    {
-                        iConnectedAsyncCB.Invoke();
-                    }
+                    iConnectedAsyncCB?.Invoke();
                 }, null);
             }
         }
@@ -270,11 +264,12 @@ namespace RTMPLibrary
             if (isClosed == false)
             {
                 PrepareNetworkStream();
-                Connected.Invoke(this);
+
+                    Connected?.Invoke(this);
             }
             else
             {
-                Disconnect.Invoke(this);
+                    Disconnect?.Invoke(this);
             }
         }
 
@@ -296,18 +291,18 @@ namespace RTMPLibrary
             {
                 if (iSocket.Connected)
                 {
-                    Connected.Invoke(this);
+                    Connected?.Invoke(this);
                 }
                 else
                 {
                     isClosed = true;
-                    Disconnect.Invoke(this);
+                    Disconnect?.Invoke(this);
                 }
             }
             else
             {
                 isClosed = true;
-                Disconnect.Invoke(this);
+                Disconnect?.Invoke(this);
             }
         }
 
@@ -488,7 +483,7 @@ namespace RTMPLibrary
 
             if (RaiseDisconnect)
             {
-                Disconnect.Invoke(this);
+                Disconnect?.Invoke(this);
             }
         }
 

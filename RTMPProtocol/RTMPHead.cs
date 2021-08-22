@@ -267,6 +267,7 @@
         public RTMPHead(byte[] ArrayValue)
         {
             int Offset;
+
             iFmtType = (enumFmtType)((ArrayValue[0] & 0xC0) >> 6);
             switch (ArrayValue[0] & 0x3F)
             {
