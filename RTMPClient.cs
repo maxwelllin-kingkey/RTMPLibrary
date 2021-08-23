@@ -23,8 +23,10 @@ namespace RTMPLibrary
         private long iTotalBodyBytes = 0L;
         private long iLastACKValue = 0L;
         private int iFmtLastVideoTimestamp = 0;
+        private int iFmtLastAudioTimestamp = 0;
         private int iFmtTimestamp = 0;
         private int iLastVideoTimestamp = 0;
+        private int iLastAudioTimestamp = 0;
         private object iLastMsg;
         private int iPlayStreamID = 1;
         private enumRTMPHandshakeState iHandshakeState;
@@ -58,6 +60,9 @@ namespace RTMPLibrary
 
         public delegate void VideoDataEventHandler(RTMPClient sender, uint TimeDelta, RTMPBodyVideoData VD);
         public event VideoDataEventHandler VideoData;
+
+        public delegate void AudioDataEventHandler(RTMPClient sender, uint TimeDelta, RTMPBodyAudioData AD);
+        public event AudioDataEventHandler AudioData;
 
         public delegate void DisconnectEventHandler(RTMPClient sender);
         public event DisconnectEventHandler Disconnect;
@@ -106,11 +111,13 @@ namespace RTMPLibrary
             iUrl = URL;
             iServerName = URI.Host;
             iUCMStreamID = -1;
-            iTotalBodyBytes = 0L;
-            iLastACKValue = 0L;
+            iTotalBodyBytes = 0;
+            iLastACKValue = 0;
             iFmtTimestamp = 0;
             iFmtLastVideoTimestamp = 0;
+            iFmtLastAudioTimestamp = 0;
             iLastVideoTimestamp = 0;
+            iLastAudioTimestamp = 0;
 
             if (URI.IsDefaultPort)
                 iPort = 1935;
@@ -518,6 +525,46 @@ namespace RTMPLibrary
                                                         // RaiseEvent VideoData(Me, TimeDelta, ServerR.Body)
                                                             VideoData?.Invoke(this, TimeDelta, VideoBody);
                                                         // RaiseEvent VideoData(Me, 0, ServerR.Body)
+                                                    }
+
+                                                    break;
+                                                }
+                                            case RTMPHead.enumTypeID.AudioData:
+                                                {
+                                                    RTMPBodyAudioData AudioBody = null;
+                                                    uint TimeDelta = 0; // ServerR.Head.Timestamp
+
+                                                    if (iFmtTimestamp >= iFmtLastAudioTimestamp)
+                                                    {
+                                                        TimeDelta = (uint)(iFmtTimestamp - iFmtLastAudioTimestamp);
+                                                    }
+                                                    else
+                                                    {
+                                                        TimeDelta = (uint)Math.Abs(0xFFFFFF - iFmtLastAudioTimestamp + iFmtTimestamp);
+                                                        if (TimeDelta > 2000)
+                                                        {
+                                                            TimeDelta = 0U;
+                                                        }
+                                                    }
+
+                                                    if (iLastAudioTimestamp > 0)
+                                                    {
+                                                        iLastAudioTimestamp = (int)(iLastAudioTimestamp + TimeDelta);
+                                                    }
+
+                                                    iFmtLastAudioTimestamp = iFmtTimestamp;
+                                                    try
+                                                    {
+                                                        AudioBody = (RTMPBodyAudioData)ServerR.Body;
+                                                    }
+                                                    catch (Exception ex)
+                                                    {
+                                                        Console.WriteLine("Video packet invalid");
+                                                    }
+
+                                                    if (AudioBody != null)
+                                                    {
+                                                        AudioData?.Invoke(this, TimeDelta, AudioBody);
                                                     }
 
                                                     break;
