@@ -6,34 +6,17 @@
 
         public AMFCommandBody GetBody
         {
-            get
-            {
-                return iRTMPBodyAMFBase;
-            }
+            get { return iRTMPBodyAMFBase; }
         }
 
         public AMF0Objects.AMF0String CommandName
         {
-            get
-            {
-                return (AMF0Objects.AMF0String)iRTMPBodyAMFBase.AMF0List[0];
-            }
+            get { return (AMF0Objects.AMF0String)iRTMPBodyAMFBase.AMF0List[0]; }
         }
 
         public AMF0Objects.AMF0Number TransactionID
         {
-            get
-            {
-                return (AMF0Objects.AMF0Number)iRTMPBodyAMFBase.AMF0List[1];
-            }
-        }
-
-        public AMF0Objects.AMF0Null NullCommandObject
-        {
-            get
-            {
-                return (AMF0Objects.AMF0Null)iRTMPBodyAMFBase.AMF0List[2];
-            }
+            get { return (AMF0Objects.AMF0Number)iRTMPBodyAMFBase.AMF0List[1]; }
         }
 
         public AMF0Objects.AMF0Object Information
@@ -51,6 +34,7 @@
             iRTMPBodyAMFBase.AMF0List.Add(new AMF0Objects.AMF0Number());
             iRTMPBodyAMFBase.AMF0List.Add(new AMF0Objects.AMF0Null());
             iRTMPBodyAMFBase.AMF0List.Add(new AMF0Objects.AMF0Object());
+
             Information.AddToProperties("level", new AMF0Objects.AMF0String());
             Information.AddToProperties("code", new AMF0Objects.AMF0String() { Value = statusCode });
             Information.AddToProperties("description", new AMF0Objects.AMF0String());

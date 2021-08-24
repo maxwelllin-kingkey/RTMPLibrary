@@ -155,11 +155,11 @@ namespace RTMPLibrary
             switch (iHandshakeState)
             {
                 case enumRTMPHandshakeState.HandshakeC0:
-                        iTCP.SendData(CreateHandshake(Common.enumHandshakeType.C0C1, default));
-                        break;
+                    iTCP.SendData(CreateHandshake(Common.enumHandshakeType.C0C1, default));
+                    break;
                 case enumRTMPHandshakeState.HandshakeC2:
-                        iTCP.SendData(CreateHandshake(Common.enumHandshakeType.C2, RecvPacket));
-                        break;
+                    iTCP.SendData(CreateHandshake(Common.enumHandshakeType.C2, RecvPacket));
+                    break;
             }
         }
 
@@ -296,11 +296,13 @@ namespace RTMPLibrary
 
         private byte[] GetRTMPBodyArray(RTMPHead.enumFmtType FmtType, int ChunkStreamID, int Timestamp, RTMPHead.enumTypeID TypeID, int StreamID, RTMPBodyBase Body)
         {
-            var RTMP = new RTMP(FmtType, TypeID, Body);
-            RTMP.Head.ChunkStreamID = ChunkStreamID;
-            RTMP.Head.Timestamp = (uint)Timestamp;
-            RTMP.Head.StreamID = (uint)StreamID;
-            return RTMP.ToByteArray(iChunkSize);
+            RTMP R = new RTMP(FmtType, TypeID, Body);
+
+            R.Head.ChunkStreamID = ChunkStreamID;
+            R.Head.Timestamp = (uint)Timestamp;
+            R.Head.StreamID = (uint)StreamID;
+
+            return R.ToByteArray(iChunkSize);
         }
 
         private void iTCP_DataReceived(TCPSocket sender, int recvCount)
@@ -324,8 +326,6 @@ namespace RTMPLibrary
                         iHandshakeState = enumRTMPHandshakeState.Completed;
                         iConnectState = enumRTMPConnectState.Connect;
 
-                        // 延遲 0.5s
-                        System.Threading.Thread.Sleep(200);
                         // 呼叫 connect
                         SendRTMPConnect();
                     }
@@ -357,10 +357,6 @@ namespace RTMPLibrary
                                 //    BufferProcessed = true;
                                 //    break;
                                 //}
-
-                                // If ServerR.Head.TypeID = RTMPHead.enumTypeID.UserControlMsg And
-                                // ServerR.Head.FmtType = RTMPHead.enumFmtType.Type0 And
-                                // ServerR.IsFmtType2 = True Then Stop
 
                                 if (ServerR != null)
                                 {
@@ -453,7 +449,7 @@ namespace RTMPLibrary
 
                                                                     if (VideoBody != null)
                                                                     {
-                                                                            VideoData?.Invoke(this, (uint)DelayTimerMS, VideoBody);
+                                                                        VideoData?.Invoke(this, (uint)DelayTimerMS, VideoBody);
                                                                     }
 
                                                                     // If DelayTimerMS < 25 Then Stop
@@ -487,7 +483,7 @@ namespace RTMPLibrary
                                             case RTMPHead.enumTypeID.VideoData:
                                                 {
                                                     RTMPBodyVideoData VideoBody = null;
-                                                    uint TimeDelta = 0U; // ServerR.Head.Timestamp
+                                                    uint TimeDelta = 0; // ServerR.Head.Timestamp
 
                                                     // Console.WriteLine("2 FmtTimestamp:" & iFmtTimestamp & "  FmtLastVideoTimestamp:" & iFmtLastVideoTimestamp)
 
@@ -498,32 +494,23 @@ namespace RTMPLibrary
                                                     else
                                                     {
                                                         TimeDelta = (uint)Math.Abs(0xFFFFFF - iFmtLastVideoTimestamp + iFmtTimestamp);
-                                                        if (TimeDelta > 2000L)
-                                                        {
-                                                            TimeDelta = 0U;
-                                                        }
+                                                        if (TimeDelta > 2000)
+                                                            TimeDelta = 0;
                                                     }
 
                                                     if (iLastVideoTimestamp > 0)
-                                                    {
                                                         iLastVideoTimestamp = (int)(iLastVideoTimestamp + TimeDelta);
-                                                    }
 
                                                     iFmtLastVideoTimestamp = iFmtTimestamp;
-                                                    try
-                                                    {
-                                                        VideoBody = (RTMPBodyVideoData)ServerR.Body;
-                                                    }
-                                                    catch (Exception ex)
-                                                    {
-                                                        Console.WriteLine("Video packet invalid");
-                                                    }
+
+                                                    try { VideoBody = (RTMPBodyVideoData)ServerR.Body; }
+                                                    catch (Exception ex) { Console.WriteLine("Video packet invalid"); }
 
                                                     if (VideoBody != null)
                                                     {
                                                         // Console.WriteLine("VideoData TimeDelta:" & TimeDelta & ", CompositionTime:" & VideoBody.CompositionTime)
                                                         // RaiseEvent VideoData(Me, TimeDelta, ServerR.Body)
-                                                            VideoData?.Invoke(this, TimeDelta, VideoBody);
+                                                        VideoData?.Invoke(this, TimeDelta, VideoBody);
                                                         // RaiseEvent VideoData(Me, 0, ServerR.Body)
                                                     }
 
@@ -658,16 +645,16 @@ namespace RTMPLibrary
                                                             {
                                                                 iConnectState = enumRTMPConnectState.GetConnectResult;
 
-                                                                    HandshakeCompleted?.Invoke(this);
+                                                                HandshakeCompleted?.Invoke(this);
                                                             }
                                                             else
                                                             {
-                                                                    HandshakeFail?.Invoke(this);
+                                                                HandshakeFail?.Invoke(this);
                                                             }
                                                         }
                                                         else
                                                         {
-                                                                HandshakeFail?.Invoke(this);
+                                                            HandshakeFail?.Invoke(this);
                                                         }
 
                                                         break;
@@ -683,12 +670,12 @@ namespace RTMPLibrary
                                                             }
                                                             else
                                                             {
-                                                                    HandshakeFail?.Invoke(this);
+                                                                HandshakeFail?.Invoke(this);
                                                             }
                                                         }
                                                         else
                                                         {
-                                                                HandshakeFail?.Invoke(this);
+                                                            HandshakeFail?.Invoke(this);
                                                         }
 
                                                         break;
@@ -736,7 +723,8 @@ namespace RTMPLibrary
                                                     default:
                                                         AMFCommand.AMFCommandBody AMFBody = (AMFCommand.AMFCommandBody)ServerR.Body;
 
-                                                        if (AMFBody.AMF0List.Count > 0) {
+                                                        if (AMFBody.AMF0List.Count > 0)
+                                                        {
                                                             if (AMFBody.AMF0List[0].ObjectType == Common.enumAMF0ObjectType.String)
                                                             {
                                                                 AMF0Objects.AMF0String AMFCode = (AMF0Objects.AMF0String)AMFBody.AMF0List[0];
@@ -761,11 +749,13 @@ namespace RTMPLibrary
                                                                 else
                                                                 {
                                                                     // other event or message
+                                                                    Console.WriteLine("Unknow event:" + AMFCode.Value);
                                                                 }
                                                             }
                                                             else
-                                                            { 
+                                                            {
                                                                 // other variable
+                                                                throw new Exception("Unable to process ObjectType:" + AMFBody.AMF0List[0].ObjectType);
                                                             }
                                                         }
 

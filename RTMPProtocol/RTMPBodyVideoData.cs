@@ -37,54 +37,26 @@ namespace RTMPLibrary
 
         public enumFrameType FrameType
         {
-            get
-            {
-                return iFrameType;
-            }
-
-            set
-            {
-                iFrameType = value;
-            }
+            get { return iFrameType; }
+            set { iFrameType = value; }
         }
 
         public int CompositionTime
         {
-            get
-            {
-                return iCompositionTime;
-            }
-
-            set
-            {
-                iCompositionTime = value;
-            }
+            get { return iCompositionTime; }
+            set { iCompositionTime = value; }
         }
 
         public enumVideoCodec CodecFormat
         {
-            get
-            {
-                return iCodecFormat;
-            }
-
-            set
-            {
-                iCodecFormat = value;
-            }
+            get { return iCodecFormat; }
+            set { iCodecFormat = value; }
         }
 
         public enumAVPacketType AVPacketType
         {
-            get
-            {
-                return iAVPacketType;
-            }
-
-            set
-            {
-                iAVPacketType = value;
-            }
+            get { return iAVPacketType; }
+            set { iAVPacketType = value; }
         }
 
         // Public Property VideoData As Byte()
@@ -189,7 +161,9 @@ namespace RTMPLibrary
 
                                 VideoData = (byte[])Array.CreateInstance(typeof(byte), (long)NALU_Size);
                                 Array.Copy(Value, OffsetIndex + SliceOffset + 9, VideoData, 0, VideoData.Length);
+
                                 iVideoSliceList.Add(VideoData);
+
                                 SliceOffset += VideoData.Length + 4;
                             }
                             else
@@ -216,6 +190,7 @@ namespace RTMPLibrary
 
                 VideoData = (byte[])Array.CreateInstance(typeof(byte), BodyLength - 1);
                 Array.Copy(Value, OffsetIndex + 1, VideoData, 0, VideoData.Length);
+
                 iVideoSliceList.Add(VideoData);
             }
         }
@@ -227,7 +202,11 @@ namespace RTMPLibrary
             RetValue.AddRange(new byte[] { (byte)((byte)((byte)iFrameType << 4) | (byte)iCodecFormat) });
             if (iCodecFormat == enumVideoCodec.H264)
             {
-                RetValue.AddRange(new byte[] { (byte)iAVPacketType, 0, 0, 0 }); // Composition Time, 永遠無意義
+                RetValue.Add((byte)iAVPacketType);
+
+                for (int I = 0; I <= 2; I++)
+                    RetValue.Add((byte)((long)Math.Round(iCompositionTime % Math.Pow(256, 2 - I + 1)) / (long)Math.Round(Math.Pow(256d, 2 - I))));
+
             }
 
             foreach (byte[] EachSlice in iVideoSliceList)
@@ -235,7 +214,7 @@ namespace RTMPLibrary
                 if (iAVPacketType != enumAVPacketType.AVC_Header)
                 {
                     for (int I = 0; I <= 3; I++)
-                        RetValue.AddRange(new byte[] { (byte)((long)Math.Round(EachSlice.Length % Math.Pow(256d, 3 - I + 1)) / (long)Math.Round(Math.Pow(256d, 3 - I))) });
+                        RetValue.AddRange(new byte[] { (byte)((long)Math.Round(EachSlice.Length % Math.Pow(256, 3 - I + 1)) / (long)Math.Round(Math.Pow(256, 3 - I))) });
                 }
 
                 RetValue.AddRange(EachSlice);
@@ -256,28 +235,14 @@ namespace RTMPLibrary
 
             public byte[] PPSContent
             {
-                get
-                {
-                    return iPPSContent;
-                }
-
-                set
-                {
-                    iPPSContent = value;
-                }
+                get { return iPPSContent; }
+                set { iPPSContent = value; }
             }
 
             public byte[] SPSContent
             {
-                get
-                {
-                    return iSPSContent;
-                }
-
-                set
-                {
-                    iSPSContent = value;
-                }
+                get { return iSPSContent; }
+                set { iSPSContent = value; }
             }
 
             public static AVCDecoderConfigurationRecord ImportFromSPS(byte[] SPSArray, byte[] PPSArray)

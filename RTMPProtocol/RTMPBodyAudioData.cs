@@ -93,6 +93,13 @@ namespace RTMPLibrary
 
         private RTMPBodyAudioData()
         {
+            iCodec = enumAudioCodec.AAC;
+            iSampleRate = enumSampleRate.SR_44K;
+            iBitDepth = enumBitDepth.BD_16bit;
+            iChannel = enumChannel.Stereo;
+
+            // 封包有兩種, 需要先傳送 AAC Head (Type: 0) + AAC Config (2 bytes)
+            // 再傳送 AAC Raw (Type: 1) + Raw (n bytes)
         }
 
         public RTMPBodyAudioData(byte[] Value, int OffsetIndex, int BodyLength)

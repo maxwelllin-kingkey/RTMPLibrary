@@ -6,34 +6,22 @@
 
         public AMFCommandBody GetBody
         {
-            get
-            {
-                return iRTMPBodyAMFBase;
-            }
+            get { return iRTMPBodyAMFBase; }
         }
 
         public AMF0Objects.AMF0String CommandName
         {
-            get
-            {
-                return (AMF0Objects.AMF0String)this.iRTMPBodyAMFBase[0];
-            }
+            get { return (AMF0Objects.AMF0String)this.iRTMPBodyAMFBase[0]; }
         }
 
         public AMF0Objects.AMF0Number TransactionID
         {
-            get
-            {
-                return (AMF0Objects.AMF0Number)this.iRTMPBodyAMFBase[1];
-            }
+            get { return (AMF0Objects.AMF0Number)this.iRTMPBodyAMFBase[1]; }
         }
 
         public AMF0Objects.AMF0Object CommandObject
         {
-            get
-            {
-                return (AMF0Objects.AMF0Object)this.iRTMPBodyAMFBase[2];
-            }
+            get { return (AMF0Objects.AMF0Object)this.iRTMPBodyAMFBase[2]; }
         }
 
         public AMF0Objects.AMF0Object OptionalArguments
