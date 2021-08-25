@@ -9,12 +9,6 @@ namespace RTMPLibrary
     {
         private RTMPSocketContaxtInterface iTCP;
 
-        public enum enumVideoPrivateType
-        {
-            NAL_SPS,
-            NAL_PPS
-        }
-
         public enum enumVideoFrameType
         {
             KeyFrame,
@@ -57,8 +51,12 @@ namespace RTMPLibrary
         private int iFrameTime = 0; // 已經經過的 frame 時間(ms)(用來計算 Time Delta)
         private Queue<int> iFrameTimeQueue = new Queue<int>();
         private bool iVideoFirstKeyFrameRaised = false;
+        private bool iAudioFirstKeyFrameRaised = false;
         private byte[] iSPSContent = null;
         private byte[] iPPSContent = null;
+        private byte[] iAACContent = null;
+        private bool iEnableVideoTrack = false;
+        private bool iEnableAudioTrack = false;
         private RTMPHandshake iHandshake;
         private RTMP iRTMP = new RTMP();
 
@@ -129,18 +127,24 @@ namespace RTMPLibrary
             set { iVideoFPS = value; }
         }
 
-        public void SetVideoPrivateData(enumVideoPrivateType PrivateType, byte[] Content)
+        public void SetAVConfig(AVConfig[] AVC)
         {
-            switch (PrivateType)
+            foreach (AVConfig EachAVC in AVC)
             {
-                case enumVideoPrivateType.NAL_SPS:
-                    iSPSContent = Content;
-
-                    break;
-                case enumVideoPrivateType.NAL_PPS:
-                    iPPSContent = Content;
-
-                    break;
+                switch (EachAVC.AVType)
+                {
+                    case AVConfig.enumAVType.H264SPS:
+                        iSPSContent = EachAVC.ConfigValue;
+                        iEnableVideoTrack = true;
+                        break;
+                    case AVConfig.enumAVType.H264PPS:
+                        iPPSContent = EachAVC.ConfigValue;
+                        break;
+                    case AVConfig.enumAVType.AAC:
+                        iAACContent = EachAVC.ConfigValue;
+                        iEnableAudioTrack = true;
+                        break;
+                }
             }
 
             CheckMetaData();
@@ -152,7 +156,65 @@ namespace RTMPLibrary
             iFrameTime = 0;
         }
 
-        public void AddVideoData(string VideoName, enumVideoFrameType VideoFrameType, byte[] VideoData, int VideoOffset, int VideoLength, uint VideoArrivalTimestampMS)
+        public void AddAudioData(byte[] AudioData, int AudioOffset, int AudioLength, int TimeDeltaMS)
+        {
+            if (iHandshakeState == enumHandshakeState.Completed)
+            {
+                if (iConnectionState == enumConnectionState.Ready)
+                {
+                    if (AudioData != null)
+                    {
+                        RTMPBodyAudioData AudioBody;
+                        byte[] AudioCopyData;
+
+                        if (AudioLength > 0)
+                        {
+                            // Push 時, Timestamp 使用相同時間軸
+                            // 因此以 VideoTimestamp 為基礎
+                            if (iAudioFirstKeyFrameRaised == false)
+                            {
+                                if (AudioData[AudioOffset] != 0)
+                                {
+                                    if (iAACContent != null)
+                                    {
+                                        RTMPBodyAudioData RTMPFirstAudioBody = null;
+                                        byte[] AudioConfigData;
+
+                                        AudioConfigData = (byte[])Array.CreateInstance(typeof(byte), iAACContent.Length + 1);
+                                        AudioConfigData[0] = 0x00;
+                                        Array.Copy(iAACContent, 0, AudioConfigData, 1, iAACContent.Length);
+
+                                        // 第一次傳送 KeyFrame
+                                        // 包含 RTMP Video Header
+                                        RTMPFirstAudioBody = new RTMPBodyAudioData();
+                                        RTMPFirstAudioBody.AudioData = AudioConfigData;
+
+                                        SendRTMPBody(RTMPHead.enumFmtType.Type1, 4, TimeDeltaMS, RTMPHead.enumTypeID.AudioData, iPlayStreamID, RTMPFirstAudioBody);
+                                        iAudioFirstKeyFrameRaised = true;
+                                    }
+                                }
+                                else
+                                {
+                                    // AAC first byte 0 is config data
+                                    iAudioFirstKeyFrameRaised = true;
+                                }
+                            }
+
+                            // Console.WriteLine("Video frame:" & VideoData(VideoOffset + 0) & ":" & VideoData(VideoOffset + 1) & ":" & VideoData(VideoOffset + 2) & ":" & VideoData(VideoOffset + 3))
+                            AudioCopyData = (byte[])Array.CreateInstance(typeof(byte), AudioLength);
+                            Array.Copy(AudioData, AudioOffset, AudioCopyData, 0, AudioCopyData.Length);
+
+                            AudioBody = new RTMPBodyAudioData();
+                            AudioBody.AudioData = AudioCopyData;
+
+                            SendRTMPBody(RTMPHead.enumFmtType.Type1, 4, TimeDeltaMS, RTMPHead.enumTypeID.AudioData, iPlayStreamID, AudioBody);
+                        }
+                    }
+                }
+            }
+        }
+
+        public void AddVideoData(enumVideoFrameType VideoFrameType, byte[] VideoData, int VideoOffset, int VideoLength, int TimeDeltaMS)
         {
             if (iHandshakeState == enumHandshakeState.Completed)
             {
@@ -160,95 +222,40 @@ namespace RTMPLibrary
                 {
                     if (VideoData != null)
                     {
-                        RTMPBodyVideoData VideoBody = default;
+                        RTMPBodyVideoData VideoBody = null;
 
                         // 必須要已經傳送過 KeyFrame 才允許開始 Video 傳輸
                         if ((iVideoFirstKeyFrameRaised) || (VideoFrameType == enumVideoFrameType.KeyFrame))
                         {
-                            int TimeDeltaMS = 0;
-
-                            if (iVideoFPS == 0)
-                            {
-                                if (VideoArrivalTimestampMS == 0)
-                                {
-                                    if (System.DateTime.Now >= iLastVideoSendDate)
-                                        TimeDeltaMS = Convert.ToInt32(System.DateTime.Now.Subtract(iLastVideoSendDate).TotalMilliseconds);
-                                }
-                                else if (iLastVideoTimestamp > 0)
-                                {
-                                    if (VideoArrivalTimestampMS >= iLastVideoTimestamp)
-                                        TimeDeltaMS = (int)(VideoArrivalTimestampMS - iLastVideoTimestamp);
-                                    else
-                                        TimeDeltaMS = (int)(uint.MaxValue - iLastVideoTimestamp + VideoArrivalTimestampMS);
-
-                                    if (TimeDeltaMS > 5000)
-                                        TimeDeltaMS = 0;
-                                }
-
-                                iLastVideoTimestamp = VideoArrivalTimestampMS;
-                            }
-                            else
-                            {
-                                if (iFrameTime >= 1000)
-                                {
-                                    for (int _Loop = 1; _Loop <= 100; _Loop++)
-                                    {
-                                        int FirstDelayTime = 0;
-
-                                        if (iFrameTime < 1000)
-                                            break;
-
-                                        FirstDelayTime = iFrameTimeQueue.Dequeue();
-                                        iFrameTime -= FirstDelayTime;
-                                    }
-
-                                    TimeDeltaMS = 1000 - iFrameTime;
-                                }
-                                else if (iVideoFPS > iFrameTimeQueue.Count)
-                                {
-                                    TimeDeltaMS = System.Convert.ToInt32((1000 - iFrameTime) / (iVideoFPS - iFrameTimeQueue.Count));
-                                }
-                                else
-                                {
-                                    TimeDeltaMS = System.Convert.ToInt32(1000 / iVideoFPS);
-                                }
-
-                                iFrameTimeQueue.Enqueue(TimeDeltaMS);
-                                iFrameTime += TimeDeltaMS;
-                            }
-
-                            // Console.WriteLine("Transfer video:" & VideoFrameType.ToString & " - Time delta: " & LastTimeMS & " - " & VideoData.Length)
-
-                            iLastVideoSendDate = System.DateTime.Now;
                             switch (VideoFrameType)
                             {
                                 case enumVideoFrameType.KeyFrame:
-                                        // Console.WriteLine("RTMP video frame type:" & VideoFrameType.ToString & ", FirstKey?" & iVideoFirstKeyFrameRaised.ToString & ", PPS?" & iPPSContent.Length & ", SPS?" & iSPSContent.Length)
+                                    // Console.WriteLine("RTMP video frame type:" & VideoFrameType.ToString & ", FirstKey?" & iVideoFirstKeyFrameRaised.ToString & ", PPS?" & iPPSContent.Length & ", SPS?" & iSPSContent.Length)
 
-                                        if (iVideoFirstKeyFrameRaised == false)
+                                    if (iVideoFirstKeyFrameRaised == false)
+                                    {
+                                        RTMPBodyVideoData RTMPFirstVideoBody = null;
+
+                                        // 第一次傳送 KeyFrame
+                                        // 包含 RTMP Video Header
+                                        RTMPFirstVideoBody = RTMPBodyVideoData.ImportSPS(iSPSContent, iPPSContent);
+                                        if (RTMPFirstVideoBody != null)
                                         {
-                                            RTMPBodyVideoData RTMPFirstVideoBody = null;
-
-                                            // 第一次傳送 KeyFrame
-                                            // 包含 RTMP Video Header
-                                            RTMPFirstVideoBody = RTMPBodyVideoData.ImportSPS(iSPSContent, iPPSContent);
-                                            if (RTMPFirstVideoBody != null)
-                                            {
-                                                SendRTMPBody(RTMPHead.enumFmtType.Type0, 7, TimeDeltaMS, RTMPHead.enumTypeID.VideoData, iPlayStreamID, RTMPFirstVideoBody);
-                                                iVideoFirstKeyFrameRaised = true;
-                                            }
+                                            SendRTMPBody(RTMPHead.enumFmtType.Type0, 7, TimeDeltaMS, RTMPHead.enumTypeID.VideoData, iPlayStreamID, RTMPFirstVideoBody);
+                                            iVideoFirstKeyFrameRaised = true;
                                         }
+                                    }
 
-                                        // Console.WriteLine("Video frame:" & VideoData(VideoOffset + 0) & ":" & VideoData(VideoOffset + 1) & ":" & VideoData(VideoOffset + 2) & ":" & VideoData(VideoOffset + 3))
-                                        VideoBody = RTMPBodyVideoData.ImportVideoRaw(RTMPBodyVideoData.enumFrameType.KeyFrame, VideoData, VideoOffset, VideoLength);
-                                        SendRTMPBody(RTMPHead.enumFmtType.Type1, 7, TimeDeltaMS, RTMPHead.enumTypeID.VideoData, iPlayStreamID, VideoBody);
+                                    // Console.WriteLine("Video frame:" & VideoData(VideoOffset + 0) & ":" & VideoData(VideoOffset + 1) & ":" & VideoData(VideoOffset + 2) & ":" & VideoData(VideoOffset + 3))
+                                    VideoBody = RTMPBodyVideoData.ImportVideoRaw(RTMPBodyVideoData.enumFrameType.KeyFrame, VideoData, VideoOffset, VideoLength);
+                                    SendRTMPBody(RTMPHead.enumFmtType.Type1, 7, TimeDeltaMS, RTMPHead.enumTypeID.VideoData, iPlayStreamID, VideoBody);
 
-                                        break;
+                                    break;
                                 case enumVideoFrameType.NonKeyFrame:
-                                        VideoBody = RTMPBodyVideoData.ImportVideoRaw(RTMPBodyVideoData.enumFrameType.NonKeyFrame, VideoData, VideoOffset, VideoLength);
-                                        SendRTMPBody(RTMPHead.enumFmtType.Type1, 7, TimeDeltaMS, RTMPHead.enumTypeID.VideoData, iPlayStreamID, VideoBody);
+                                    VideoBody = RTMPBodyVideoData.ImportVideoRaw(RTMPBodyVideoData.enumFrameType.NonKeyFrame, VideoData, VideoOffset, VideoLength);
+                                    SendRTMPBody(RTMPHead.enumFmtType.Type1, 7, TimeDeltaMS, RTMPHead.enumTypeID.VideoData, iPlayStreamID, VideoBody);
 
-                                        break;
+                                    break;
                             }
                         }
                     }
@@ -309,43 +316,64 @@ namespace RTMPLibrary
         {
             if ((iHandshakeState == enumHandshakeState.Completed) && (iConnectionState == enumConnectionState.StreamBegin))
             {
-                if ((iSPSContent != null) && (iPPSContent != null))
+                AMFCommand.onMetaData MetaBody = new AMFCommand.onMetaData();
+
+                MetaBody.Information.SetValue("Server", "TopNVR RTMP Library");
+
+                if (iEnableVideoTrack)
                 {
-                    SPSParsing Parsing = new SPSParsing();
-                    SPSParsing.SeqParameterSet SPS = null;
-                    int iVideoWidth = 1024;
-                    int iVideoHeight = 768;
-                    AMFCommand.onMetaData MetaBody = new AMFCommand.onMetaData();
-
-                    try { SPS = Parsing.seq_parameter_set_rbsp(iSPSContent); }
-                    catch (Exception ex) { }
-
-                    if (SPS != null)
+                    if ((iSPSContent != null) && (iPPSContent != null))
                     {
-                        //iVideoWidth = (SPS.pic_width_in_mbs_minus1 + 1) * 16;
-                        //iVideoHeight = (SPS.pic_height_in_map_units_minus1 + 1) * 16;
-                        iVideoWidth = SPS.Width();
-                        iVideoHeight = SPS.Height();
+                        SPSParsing Parsing = new SPSParsing();
+                        SPSParsing.SeqParameterSet SPS = null;
+                        int iVideoWidth = 1024;
+                        int iVideoHeight = 768;
+
+                        try { SPS = Parsing.seq_parameter_set_rbsp(iSPSContent); }
+                        catch (Exception ex) { }
+
+                        if (SPS != null)
+                        {
+                            iVideoWidth = SPS.Width();
+                            iVideoHeight = SPS.Height();
+                        }
+
+                        MetaBody.Information.AddToProperties("width", new AMF0Objects.AMF0Number() { Value = iVideoWidth });
+                        MetaBody.Information.AddToProperties("height", new AMF0Objects.AMF0Number() { Value = iVideoHeight });
+                        MetaBody.Information.AddToProperties("displayWidth", new AMF0Objects.AMF0Number() { Value = iVideoWidth });
+                        MetaBody.Information.AddToProperties("displayHeight", new AMF0Objects.AMF0Number() { Value = iVideoHeight });
+                        MetaBody.Information.AddToProperties("duration", new AMF0Objects.AMF0Number() { Value = 0 });
+
+                        if (iVideoFPS != 0)
+                        {
+                            MetaBody.Information.AddToProperties("framerate", new AMF0Objects.AMF0Number() { Value = iVideoFPS });
+                            MetaBody.Information.AddToProperties("fps", new AMF0Objects.AMF0Number() { Value = iVideoFPS });
+                        }
+
+                        MetaBody.Information.AddToProperties("videocodecid", new AMF0Objects.AMF0String() { Value = "avc1" });
                     }
-
-                    MetaBody.Information.SetValue("Server", "TopNVR RTMP Library");
-                    MetaBody.Information.SetValue("width", iVideoWidth);
-                    MetaBody.Information.SetValue("height", iVideoHeight);
-                    MetaBody.Information.SetValue("displayWidth", iVideoWidth);
-                    MetaBody.Information.SetValue("displayHeight", iVideoHeight);
-                    MetaBody.Information.SetValue("duration", 0);
-                    MetaBody.Information.SetValue("framerate", iVideoFPS);
-                    MetaBody.Information.SetValue("fps", iVideoFPS);
-                    MetaBody.Information.SetValue("videodatarate", 100);
-                    MetaBody.Information.SetValue("videocodecid", 0);
-                    MetaBody.Information.SetValue("audiodatarate", 0);
-                    MetaBody.Information.SetValue("audiocodecid", 16);
-                    MetaBody.Information.SetValue("profile", "");
-                    MetaBody.Information.SetValue("level", "");
-
-                    SendRTMPBody(RTMPHead.enumFmtType.Type0, 5, 0, RTMPHead.enumTypeID.AMF0Data, iPlayStreamID, MetaBody.GetBody);
-                    iConnectionState = enumConnectionState.Ready;
                 }
+
+                if (iEnableAudioTrack) {
+                    if (iAACContent != null) {
+                        AACConfigDecoder ACD = new AACConfigDecoder();
+
+                        ACD.AACConfigDecode(iAACContent);
+
+                        MetaBody.Information.AddToProperties("audiocodecid", new AMF0Objects.AMF0String() { Value = "mp4a" });
+                        MetaBody.Information.AddToProperties("audiodatarate", new AMF0Objects.AMF0Number() { Value = 0 });
+                        MetaBody.Information.AddToProperties("audiosamplerate", new AMF0Objects.AMF0Number() { Value = ACD.sampleFrequency });
+                        MetaBody.Information.AddToProperties("audiosamplesize", new AMF0Objects.AMF0Number() { Value = 16 });
+
+                        if (ACD.channelConfig >= 2)
+                            MetaBody.Information.AddToProperties("stereo", new AMF0Objects.AMF0Boolean() { Value = true });
+                        else
+                            MetaBody.Information.AddToProperties("stereo", new AMF0Objects.AMF0Boolean() { Value = false });
+                    }
+                }
+
+                SendRTMPBody(RTMPHead.enumFmtType.Type0, 5, 0, RTMPHead.enumTypeID.AMF0Data, iPlayStreamID, MetaBody.GetBody);
+                iConnectionState = enumConnectionState.Ready;
             }
         }
 

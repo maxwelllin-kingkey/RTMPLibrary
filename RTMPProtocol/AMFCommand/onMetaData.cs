@@ -24,6 +24,8 @@
             iRTMPBodyAMFBase = new AMFCommandBody();
             iRTMPBodyAMFBase.AMF0List.Add(new AMF0Objects.AMF0String() { Value = "onMetaData" });
             iRTMPBodyAMFBase.AMF0List.Add(new AMF0Objects.AMF0Object());
+
+            /*
             Information.AddToProperties("Server", new AMF0Objects.AMF0String());
             Information.AddToProperties("width", new AMF0Objects.AMF0Number());
             Information.AddToProperties("height", new AMF0Objects.AMF0Number());
@@ -38,6 +40,7 @@
             Information.AddToProperties("audiocodecid", new AMF0Objects.AMF0Number());
             Information.AddToProperties("profile", new AMF0Objects.AMF0String());
             Information.AddToProperties("level", new AMF0Objects.AMF0String());
+            */
         }
 
         public onMetaData(AMFCommandBody Body)
