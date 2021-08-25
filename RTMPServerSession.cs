@@ -86,91 +86,47 @@ namespace RTMPLibrary
 
         public RTMPSocketContaxtInterface GetSourceSocket
         {
-            get
-            {
-                return iTCP;
-            }
+            get { return iTCP; }
         }
 
         public enumHandshakeState HandshakeState
         {
-            get
-            {
-                return iHandshakeState;
-            }
+            get { return iHandshakeState; }
         }
 
         public enumConnectionState ConnectionState
         {
-            get
-            {
-                return iConnectionState;
-            }
+            get { return iConnectionState; }
         }
 
         public int ChunkSize
         {
-            get
-            {
-                return iChunkSize;
-            }
-
-            set
-            {
-                iChunkSize = value;
-            }
+            get { return iChunkSize; }
+            set { iChunkSize = value; }
         }
 
         public int WindowAckSize
         {
-            get
-            {
-                return iWindowAckSize;
-            }
-
-            set
-            {
-                iWindowAckSize = value;
-            }
+            get { return iWindowAckSize; }
+            set { iWindowAckSize = value; }
         }
 
         public int BufferLengthMS
         {
-            get
-            {
-                return iBufferLengthMS;
-            }
-
-            set
-            {
-                iBufferLengthMS = value;
-            }
+            get { return iBufferLengthMS; }
+            set { iBufferLengthMS = value; }
         }
 
         public int PeerBandwidth
         {
-            get
-            {
-                return iPeerBandwidth;
-            }
-
-            set
-            {
-                iPeerBandwidth = value;
-            }
+            get { return iPeerBandwidth; }
+            set { iPeerBandwidth = value; }
         }
 
         public float VideoFPS
         {
-            get
-            {
-                return iVideoFPS;
-            }
-
-            set
-            {
-                iVideoFPS = value;
-            }
+            get { return iVideoFPS; }
+            set { iVideoFPS = value; }
         }
 
         public void SetVideoPrivateData(enumVideoPrivateType PrivateType, byte[] Content)
@@ -210,7 +166,8 @@ namespace RTMPLibrary
                         if ((iVideoFirstKeyFrameRaised) || (VideoFrameType == enumVideoFrameType.KeyFrame))
                         {
                             int TimeDeltaMS = 0;
-                            if (iVideoFPS == 0f)
+
+                            if (iVideoFPS == 0)
                             {
                                 if (VideoArrivalTimestampMS == 0)
                                 {

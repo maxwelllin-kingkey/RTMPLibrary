@@ -96,6 +96,19 @@ namespace RTMPLibrary
             return RetValue;
         }
 
+        public static RTMPBodyVideoData ImportVideoRaw(enumFrameType FrameType, List<byte[]> VideoRawList)
+        {
+            var RetValue = new RTMPBodyVideoData();
+
+            RetValue.iAVPacketType = enumAVPacketType.AVC_NALU;
+            RetValue.iFrameType = FrameType;
+            RetValue.iCodecFormat = enumVideoCodec.H264;
+
+            RetValue.GetSliceList().AddRange(VideoRawList.ToArray());
+
+            return RetValue;
+        }
+
         public static RTMPBodyVideoData ImportSPS(byte[] SPS, byte[] PPS)
         {
             AVCDecoderConfigurationRecord AVConfig = null;
@@ -154,7 +167,7 @@ namespace RTMPLibrary
 
                         if (SliceOffset + 5 < BodyLength)
                         {
-                            NALU_Size = (uint)Math.Round(Value[OffsetIndex + SliceOffset + 5] * Math.Pow(256d, 3d) + Value[OffsetIndex + SliceOffset + 6] * Math.Pow(256d, 2d) + Value[OffsetIndex + SliceOffset + 7] * 256 + Value[OffsetIndex + SliceOffset + 8]);
+                            NALU_Size = (uint)Math.Round(Value[OffsetIndex + SliceOffset + 5] * Math.Pow(256, 3) + Value[OffsetIndex + SliceOffset + 6] * Math.Pow(256, 2) + Value[OffsetIndex + SliceOffset + 7] * 256 + Value[OffsetIndex + SliceOffset + 8]);
                             if (NALU_Size < 1000000L)
                             {
                                 // If NALU_Size = 2 Then Stop
@@ -245,6 +258,56 @@ namespace RTMPLibrary
                 set { iSPSContent = value; }
             }
 
+            public static AVCDecoderConfigurationRecord DecodeFromRTMPVideoData(byte[] Value, int Offset, int Length)
+            {
+                AVCDecoderConfigurationRecord RetValue = null;
+
+                if (Value[0] == 0x01) {
+                    int SPSCount;
+                    int PPSCount;
+                    int pos;
+                    byte[] SPSArray = null;
+                    byte[] PPSArray = null;
+
+                    SPSCount = (Value[5] & 0x1f);
+
+                    pos = 6;
+                    for (int i = 0; i < SPSCount; i++) {
+                        int SPSSize;
+
+                        SPSSize = Value[pos + 0] * 256 + Value[pos + 1];
+
+                        if (SPSArray == null)
+                        {
+                            SPSArray = (byte[])Array.CreateInstance(typeof(byte), SPSSize);
+                            Array.Copy(Value, pos + 2, SPSArray, 0, SPSArray.Length);
+                        }
+
+                        pos += (SPSSize + 2);
+                    }
+
+                    PPSCount = Value[pos++];
+                    for (int i = 0; i < PPSCount; i++)
+                    {
+                        int PPSSize;
+
+                        PPSSize = Value[pos + 0] * 256 + Value[pos + 1];
+
+                        if (PPSArray == null)
+                        {
+                            PPSArray = (byte[])Array.CreateInstance(typeof(byte), PPSSize);
+                            Array.Copy(Value, pos + 2, PPSArray, 0, PPSArray.Length);
+                        }
+
+                        pos += (PPSSize + 2);
+                    }
+
+                    RetValue = AVCDecoderConfigurationRecord.ImportFromSPS(SPSArray, PPSArray);
+                }
+
+                return RetValue;
+            }
+
             public static AVCDecoderConfigurationRecord ImportFromSPS(byte[] SPSArray, byte[] PPSArray)
             {
                 var Parsing = new SPSParsing();
@@ -289,8 +352,8 @@ namespace RTMPLibrary
                 RetValue[1] = iAVCProfileIndication;
                 RetValue[2] = iProfile_compatibility;
                 RetValue[3] = iAVCLevelIndication;
-                RetValue[4] = (byte)(iLengthSizeMinusOne - 1);
-                RetValue[5] = 1;
+                RetValue[4] = (byte)((byte)(iLengthSizeMinusOne - 1) | 0xfc);
+                RetValue[5] = (byte)((byte)1 | 0xe0);
                 RetValue[6] = (byte)(iSPSContent.Length / 256);
                 RetValue[7] = (byte)(iSPSContent.Length % 256);
 

@@ -19,6 +19,11 @@
             get { return (AMF0Objects.AMF0Number)iRTMPBodyAMFBase.AMF0List[1]; }
         }
 
+        public string code {
+            get { return ((AMF0Objects.AMF0String)Information.GetValue("code")).Value; }
+            set { Information.SetValue("code", value); }
+        }
+
         public AMF0Objects.AMF0Object Information
         {
             get

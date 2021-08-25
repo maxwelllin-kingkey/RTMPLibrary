@@ -22,11 +22,7 @@ namespace RTMPLibrary
         private int iBufferLengthMS = 1000; // ms
         private long iTotalBodyBytes = 0L;
         private long iLastACKValue = 0L;
-        private int iFmtLastVideoTimestamp = 0;
-        private int iFmtLastAudioTimestamp = 0;
         private int iFmtTimestamp = 0;
-        private int iLastVideoTimestamp = 0;
-        private int iLastAudioTimestamp = 0;
         private object iLastMsg;
         private int iPlayStreamID = 1;
         private enumRTMPHandshakeState iHandshakeState;
@@ -35,7 +31,22 @@ namespace RTMPLibrary
         private int iUCMStreamID = -1;
         private byte[] iLastPacket = null;
         private RTMP iRTMP = new RTMP();
+        private int iTransactionID = 1;
         private bool iBeginStreamReceived = false;
+        private bool iIsPublishMode = false;
+        private bool iAlreadySendDataFrame = false;
+        private string iStreamName;
+        private string iAppName;
+
+        private bool iAVConfigSet = false;
+        private bool iEnableVideoTrack = false;
+        private bool iEnableAudioTrack = false;
+        private bool iVideoFirstFrameRaised = false;
+        private bool iAudioFirstFrameRaised = false;
+        private byte[] H264SPSConfig = null;
+        private byte[] H264PPSConfig = null;
+        private byte[] AACConfig = null;
+
         public string tcUrl;
         public string swfUrl;
         public string pageUrl;
@@ -67,6 +78,12 @@ namespace RTMPLibrary
         public delegate void DisconnectEventHandler(RTMPClient sender);
         public event DisconnectEventHandler Disconnect;
 
+        public enum enumVideoFrameType
+        {
+            KeyFrame,
+            NonKeyFrame
+        }
+
         public enum enumRTMPHandshakeState
         {
             HandshakeC0,
@@ -82,7 +99,9 @@ namespace RTMPLibrary
             GetCreateStreamResult,
             Play,
             GetPlayResult,
-            BeginStream
+            BeginStream,
+            Publish,
+            BeginPublish
         }
 
         public RTMPClient()
@@ -103,50 +122,272 @@ namespace RTMPLibrary
             }
         }
 
-        public void RequestRTMP(string URL)
+        public void SetAVConfig(AVConfig[] AVC)
+        {
+            if (iAVConfigSet == false)
+            {
+                foreach (AVConfig EachAVC in AVC)
+                {
+                    switch (EachAVC.AVType)
+                    {
+                        case AVConfig.enumAVType.H264SPS:
+                            H264SPSConfig = EachAVC.ConfigValue;
+                            iEnableVideoTrack = true;
+                            break;
+                        case AVConfig.enumAVType.H264PPS:
+                            H264PPSConfig = EachAVC.ConfigValue;
+                            break;
+                        case AVConfig.enumAVType.AAC:
+                            AACConfig = EachAVC.ConfigValue;
+                            iEnableAudioTrack = true;
+                            break;
+                    }
+                }
+
+                iAVConfigSet = true;
+
+                if (iConnectState == enumRTMPConnectState.Publish)
+                {
+                    SendDataFrame();
+                    iConnectState = enumRTMPConnectState.BeginPublish;
+                }
+            }
+        }
+
+        public void SendVideo(enumVideoFrameType VideoFrameType, byte[] VideoData, int VideoOffset, int VideoLength, int TimeDeltaMS)
+        {
+            if (iConnectState == enumRTMPConnectState.BeginPublish)
+            {
+                RTMPBodyVideoData VideoBody;
+
+                switch (VideoFrameType)
+                {
+                    case enumVideoFrameType.KeyFrame:
+                        if (iVideoFirstFrameRaised == false)
+                        {
+                            RTMPBodyVideoData RTMPFirstVideoBody = null;
+
+                            // 第一次傳送 KeyFrame
+                            // 包含 RTMP Video Header
+                            RTMPFirstVideoBody = RTMPBodyVideoData.ImportSPS(H264SPSConfig, H264PPSConfig);
+                            if (RTMPFirstVideoBody != null)
+                            {
+                                SendRTMPBody(RTMPHead.enumFmtType.Type0, 7, TimeDeltaMS, RTMPHead.enumTypeID.VideoData, iPlayStreamID, RTMPFirstVideoBody);
+                                iVideoFirstFrameRaised = true;
+                            }
+                        }
+
+                        // Console.WriteLine("Video frame:" & VideoData(VideoOffset + 0) & ":" & VideoData(VideoOffset + 1) & ":" & VideoData(VideoOffset + 2) & ":" & VideoData(VideoOffset + 3))
+                        VideoBody = RTMPBodyVideoData.ImportVideoRaw(RTMPBodyVideoData.enumFrameType.KeyFrame, VideoData, VideoOffset, VideoLength);
+                        VideoBody.CompositionTime = 0;
+                        SendRTMPBody(RTMPHead.enumFmtType.Type1, 7, TimeDeltaMS, RTMPHead.enumTypeID.VideoData, iPlayStreamID, VideoBody);
+
+                        break;
+                    case enumVideoFrameType.NonKeyFrame:
+                        VideoBody = RTMPBodyVideoData.ImportVideoRaw(RTMPBodyVideoData.enumFrameType.NonKeyFrame, VideoData, VideoOffset, VideoLength);
+                        VideoBody.CompositionTime = 0;
+                        SendRTMPBody(RTMPHead.enumFmtType.Type1, 7, TimeDeltaMS, RTMPHead.enumTypeID.VideoData, iPlayStreamID, VideoBody);
+
+                        break;
+                }
+            }
+
+        }
+
+        public void SendVideo(enumVideoFrameType VideoFrameType, List<byte[]> VideoDataList, int TimeDeltaMS)
+        {
+            if (iConnectState == enumRTMPConnectState.BeginPublish)
+            {
+                RTMPBodyVideoData VideoBody;
+
+                switch (VideoFrameType)
+                {
+                    case enumVideoFrameType.KeyFrame:
+                        if (iVideoFirstFrameRaised == false)
+                        {
+                            RTMPBodyVideoData RTMPFirstVideoBody = null;
+
+                            // 第一次傳送 KeyFrame
+                            // 包含 RTMP Video Header
+                            RTMPFirstVideoBody = RTMPBodyVideoData.ImportSPS(H264SPSConfig, H264PPSConfig);
+                            if (RTMPFirstVideoBody != null)
+                            {
+                                SendRTMPBody(RTMPHead.enumFmtType.Type0, 7, TimeDeltaMS, RTMPHead.enumTypeID.VideoData, iPlayStreamID, RTMPFirstVideoBody);
+                                iVideoFirstFrameRaised = true;
+                            }
+                        }
+
+                        // Console.WriteLine("Video frame:" & VideoData(VideoOffset + 0) & ":" & VideoData(VideoOffset + 1) & ":" & VideoData(VideoOffset + 2) & ":" & VideoData(VideoOffset + 3))
+                        VideoBody = RTMPBodyVideoData.ImportVideoRaw(RTMPBodyVideoData.enumFrameType.KeyFrame, VideoDataList);
+                        VideoBody.CompositionTime = 0;
+                        SendRTMPBody(RTMPHead.enumFmtType.Type1, 7, TimeDeltaMS, RTMPHead.enumTypeID.VideoData, iPlayStreamID, VideoBody);
+
+                        break;
+                    case enumVideoFrameType.NonKeyFrame:
+                        VideoBody = RTMPBodyVideoData.ImportVideoRaw(RTMPBodyVideoData.enumFrameType.NonKeyFrame, VideoDataList);
+                        VideoBody.CompositionTime = 0;
+                        SendRTMPBody(RTMPHead.enumFmtType.Type1, 7, TimeDeltaMS, RTMPHead.enumTypeID.VideoData, iPlayStreamID, VideoBody);
+
+                        break;
+                }
+            }
+
+        }
+
+        public void SendAudio(byte[] AudioData, int Offset, int Length, int TimeDeltaMS)
+        {
+            if (iConnectState == enumRTMPConnectState.BeginPublish)
+            {
+                RTMPBodyAudioData AudioBody;
+                byte[] AudioCopyData;
+
+                if (Length > 0)
+                {
+                    // Push 時, Timestamp 使用相同時間軸
+                    // 因此以 VideoTimestamp 為基礎
+                    if (iAudioFirstFrameRaised == false)
+                    {
+                        if (AudioData[Offset] != 0)
+                        {
+                            if (AACConfig != null)
+                            {
+                                RTMPBodyAudioData RTMPFirstAudioBody = null;
+                                byte[] AudioConfigData;
+
+                                AudioConfigData = (byte[])Array.CreateInstance(typeof(byte), AACConfig.Length + 1);
+                                AudioConfigData[0] = 0x00;
+                                Array.Copy(AACConfig, 0, AudioConfigData, 1, AACConfig.Length);
+
+                                // 第一次傳送 KeyFrame
+                                // 包含 RTMP Video Header
+                                RTMPFirstAudioBody = new RTMPBodyAudioData();
+                                RTMPFirstAudioBody.AudioData = AudioConfigData;
+
+                                SendRTMPBody(RTMPHead.enumFmtType.Type1, 4, TimeDeltaMS, RTMPHead.enumTypeID.AudioData, iPlayStreamID, RTMPFirstAudioBody);
+                                iAudioFirstFrameRaised = true;
+                            }
+                        }
+                        else
+                        {
+                            // AAC first byte 0 is config data
+                            iAudioFirstFrameRaised = true;
+                        }
+                    }
+
+                    // Console.WriteLine("Video frame:" & VideoData(VideoOffset + 0) & ":" & VideoData(VideoOffset + 1) & ":" & VideoData(VideoOffset + 2) & ":" & VideoData(VideoOffset + 3))
+                    AudioCopyData = (byte[])Array.CreateInstance(typeof(byte), Length);
+                    Array.Copy(AudioData, Offset, AudioCopyData, 0, AudioCopyData.Length);
+
+                    AudioBody = new RTMPBodyAudioData();
+                    AudioBody.AudioData = AudioCopyData;
+
+                    SendRTMPBody(RTMPHead.enumFmtType.Type1, 4, TimeDeltaMS, RTMPHead.enumTypeID.AudioData, iPlayStreamID, AudioBody);
+                }
+            }
+        }
+
+        public void PushURL(string URL)
+        {
+            iIsPublishMode = true;
+
+            RequestRTMP(URL);
+        }
+
+        public void PlayURL(string URL)
+        {
+            iIsPublishMode = false;
+
+            RequestRTMP(URL);
+        }
+
+        private void RequestRTMP(string URL)
         {
             Uri URI = new Uri(URL);
             bool IsConnected = false;
+            string TmpString;
 
-            iUrl = URL;
-            iServerName = URI.Host;
-            iUCMStreamID = -1;
-            iTotalBodyBytes = 0;
-            iLastACKValue = 0;
-            iFmtTimestamp = 0;
-            iFmtLastVideoTimestamp = 0;
-            iFmtLastAudioTimestamp = 0;
-            iLastVideoTimestamp = 0;
-            iLastAudioTimestamp = 0;
+            if (URI.Scheme.ToUpper() == "RTMP".ToUpper())
+            {
+                iUrl = URL;
+                iServerName = URI.Host;
+                iUCMStreamID = -1;
+                iTotalBodyBytes = 0;
+                iLastACKValue = 0;
+                iFmtTimestamp = 0;
+                iTransactionID = 1;
+                iAlreadySendDataFrame = false;
 
-            if (URI.IsDefaultPort)
-                iPort = 1935;
+                iAVConfigSet = false;
+                iEnableVideoTrack = false;
+                iEnableAudioTrack = false;
+                iVideoFirstFrameRaised = false;
+                iAudioFirstFrameRaised = false;
+                H264SPSConfig = null;
+                H264PPSConfig = null;
+                AACConfig = null;
+
+                TmpString = URI.AbsolutePath;
+                if (string.IsNullOrEmpty(TmpString) == false)
+                {
+                    int Tmp1;
+
+                    if (TmpString.Substring(0, 1) == @"/")
+                        TmpString = TmpString.Substring(1);
+
+                    Tmp1 = TmpString.LastIndexOf("/");
+                    if (Tmp1 != -1)
+                    {
+                        iStreamName = TmpString.Substring(Tmp1 + 1);
+                        iAppName = TmpString.Substring(0, Tmp1);
+                    }
+                    else
+                    {
+                        iStreamName = TmpString;
+                        iAppName = string.Empty;
+                    }
+
+                    if (string.IsNullOrEmpty(URI.Query) == false)
+                        iStreamName += URI.Query;
+                }
+                else
+                {
+                    iStreamName = string.Empty;
+                    iAppName = string.Empty;
+                }
+
+                if (URI.IsDefaultPort)
+                    iPort = 1935;
+                else
+                    iPort = URI.Port;
+
+                iPath = URI.PathAndQuery;
+                iHandshakeState = enumRTMPHandshakeState.HandshakeC0;
+                iBeginStreamReceived = false;
+
+                iTCP = new TCPSocket();
+                iTCP.DataReceived += iTCP_DataReceived;
+                iTCP.Disconnect += iTCP_Disconnect;
+
+                try
+                {
+                    iTCP.Connect(iServerName, iPort);
+                    IsConnected = true;
+                }
+                catch (Exception ex)
+                {
+                    Close();
+                    throw ex;
+                }
+
+                if (IsConnected)
+                {
+                    iTCP.StartReceive();
+                    ProcessHandshake(null);
+                }
+            }
             else
-                iPort = URI.Port;
-
-            iPath = URI.PathAndQuery;
-            iHandshakeState = enumRTMPHandshakeState.HandshakeC0;
-            iBeginStreamReceived = false;
-
-            iTCP = new TCPSocket();
-            iTCP.DataReceived += iTCP_DataReceived;
-            iTCP.Disconnect += iTCP_Disconnect;
-
-            try
             {
-                iTCP.Connect(iServerName, iPort);
-                IsConnected = true;
-            }
-            catch (Exception ex)
-            {
-                Close();
-                throw ex;
-            }
-
-            if (IsConnected)
-            {
-                iTCP.StartReceive();
-                ProcessHandshake(null);
+                throw new Exception("Unknow URL:" + URI.Scheme);
             }
         }
 
@@ -243,7 +484,6 @@ namespace RTMPLibrary
         {
             AMFCommand.Connect RTMPConnect = new AMFCommand.Connect();
             string[] PathArray = null;
-            string appName;
             string iTcUrl = tcUrl;
 
             // iHandshakeState = enumRTMPHandshakeState.HandshakeC0
@@ -254,7 +494,6 @@ namespace RTMPLibrary
             else
                 PathArray = iPath.Split("/");
 
-            appName = PathArray[0];
 
             // 重組 tcUrl
             if (string.IsNullOrEmpty(iTcUrl))
@@ -268,17 +507,17 @@ namespace RTMPLibrary
             }
 
             RTMPConnect.CommandName.Value = "connect";
-            RTMPConnect.TransactionID.Value = 1;
-            RTMPConnect.CommandObject.SetValue("app", appName);
+            RTMPConnect.TransactionID.Value = iTransactionID++;
+            RTMPConnect.CommandObject.SetValue("app", iAppName);
             RTMPConnect.CommandObject.SetValue("flashVer", "LNX " + iVersion);
             RTMPConnect.CommandObject.SetValue("tcUrl", iTcUrl);
             RTMPConnect.CommandObject.SetValue("swfUrl", swfUrl);
             RTMPConnect.CommandObject.SetValue("pageUrl", pageUrl);
             RTMPConnect.CommandObject.SetValue("fpad", false);
-            RTMPConnect.CommandObject.SetValue("capabilities", 15);
-            RTMPConnect.CommandObject.SetValue("audioCodecs", 4071);
-            RTMPConnect.CommandObject.SetValue("videoCodecs", 252);
-            RTMPConnect.CommandObject.SetValue("videoFunction", 1);
+            //RTMPConnect.CommandObject.SetValue("capabilities", 15);
+            //RTMPConnect.CommandObject.SetValue("audioCodecs", 4071);
+            //RTMPConnect.CommandObject.SetValue("videoCodecs", 252);
+            //RTMPConnect.CommandObject.SetValue("videoFunction", 1);
 
             if ((string.IsNullOrEmpty(VideoUser) == false) || (string.IsNullOrEmpty(VideoPassword) == false))
             {
@@ -361,7 +600,6 @@ namespace RTMPLibrary
                                 if (ServerR != null)
                                 {
                                     iFmtTimestamp += (int)ServerR.Head.Timestamp;
-                                    // Console.WriteLine("0 FmtTimestamp:" & iFmtTimestamp & "  FmtLastVideoTimestamp:" & iFmtLastVideoTimestamp & "  [+" & ServerR.Head.Timestamp & "]")
 
                                     if (ServerR.Body == null)
                                     {
@@ -404,16 +642,11 @@ namespace RTMPLibrary
                                                 {
                                                     // 混合封包
                                                     RTMPBodyAggregate AggreMsg;
-                                                    bool HasVideoPacket = false;
-                                                    long TotalDelayMS = 0L;
                                                     AggreMsg = (RTMPBodyAggregate)ServerR.Body;
 
                                                     // Console.WriteLine("Aggregate package:" & AggreMsg.GetList.Count)
                                                     foreach (RTMPBodyAggregate.AggregateMessage EachMsg in AggreMsg.GetList())
                                                     {
-                                                        if (iLastVideoTimestamp == 0)
-                                                            iLastVideoTimestamp = EachMsg.Timestamp;
-
                                                         // Console.WriteLine("TypeID [" & EachMsg.TypeID.ToString & "] Aggregate Timestamp:" & EachMsg.Timestamp & ", LastVideoTimestamp:" & iLastVideoTimestamp)
 
                                                         switch (EachMsg.TypeID)
@@ -421,42 +654,31 @@ namespace RTMPLibrary
                                                             case RTMPHead.enumTypeID.VideoData:
                                                                 {
                                                                     RTMPBodyVideoData VideoBody = null;
-                                                                    int DelayTimerMS;
-                                                                    try
-                                                                    {
-                                                                        VideoBody = new RTMPBodyVideoData(EachMsg.Body, EachMsg.BodyOffset, EachMsg.BodyLength);
-                                                                    }
-                                                                    catch (Exception ex)
-                                                                    {
-                                                                        Console.WriteLine("Aggregate invalid video:" + ex.Message);
-                                                                    }
 
-                                                                    if (EachMsg.Timestamp >= iLastVideoTimestamp)
-                                                                    {
-                                                                        DelayTimerMS = EachMsg.Timestamp - iLastVideoTimestamp;
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        DelayTimerMS = Math.Abs(0xFFFFFF - iLastVideoTimestamp + EachMsg.Timestamp);
-                                                                        if (DelayTimerMS > 2000)
-                                                                        {
-                                                                            DelayTimerMS = 0;
-                                                                        }
-                                                                    }
+                                                                    try { VideoBody = new RTMPBodyVideoData(EachMsg.Body, EachMsg.BodyOffset, EachMsg.BodyLength); }
+                                                                    catch (Exception ex) { Console.WriteLine("Aggregate invalid video:" + ex.Message); }
 
                                                                     // Composition Time 等同 RTSP Timestamp (上一個封包的總合經過時間)
                                                                     // Time Delta 是每一個封包的時間差, 一個封包內可能包含許多 Video Data
 
                                                                     if (VideoBody != null)
                                                                     {
-                                                                        VideoData?.Invoke(this, (uint)DelayTimerMS, VideoBody);
+                                                                        VideoData?.Invoke(this, (uint)EachMsg.Timestamp - ServerR.Head.Timestamp, VideoBody);
                                                                     }
 
-                                                                    // If DelayTimerMS < 25 Then Stop
+                                                                    break;
+                                                                }
+                                                            case RTMPHead.enumTypeID.AudioData:
+                                                                {
+                                                                    RTMPBodyAudioData AudioBody = null;
 
-                                                                    HasVideoPacket = true;
-                                                                    TotalDelayMS += DelayTimerMS;
-                                                                    iLastVideoTimestamp = EachMsg.Timestamp;
+                                                                    try { AudioBody = new RTMPBodyAudioData(EachMsg.Body, EachMsg.BodyOffset, EachMsg.BodyLength); }
+                                                                    catch (Exception ex) { Console.WriteLine("Aggregate invalid audio:" + ex.Message); }
+
+                                                                    if (AudioBody != null)
+                                                                    {
+                                                                        AudioData?.Invoke(this, (uint)EachMsg.Timestamp - ServerR.Head.Timestamp, AudioBody);
+                                                                    }
 
                                                                     break;
                                                                 }
@@ -472,36 +694,11 @@ namespace RTMPLibrary
                                                         }
                                                     }
 
-                                                    if (HasVideoPacket)
-                                                    {
-                                                        iFmtLastVideoTimestamp = (int)(iFmtTimestamp + TotalDelayMS);
-                                                        // Console.WriteLine("1 FmtTimestamp:" & iFmtTimestamp & "  FmtLastVideoTimestamp:" & iFmtLastVideoTimestamp)
-                                                    }
-
                                                     break;
                                                 }
                                             case RTMPHead.enumTypeID.VideoData:
                                                 {
                                                     RTMPBodyVideoData VideoBody = null;
-                                                    uint TimeDelta = 0; // ServerR.Head.Timestamp
-
-                                                    // Console.WriteLine("2 FmtTimestamp:" & iFmtTimestamp & "  FmtLastVideoTimestamp:" & iFmtLastVideoTimestamp)
-
-                                                    if (iFmtTimestamp >= iFmtLastVideoTimestamp)
-                                                    {
-                                                        TimeDelta = (uint)(iFmtTimestamp - iFmtLastVideoTimestamp);
-                                                    }
-                                                    else
-                                                    {
-                                                        TimeDelta = (uint)Math.Abs(0xFFFFFF - iFmtLastVideoTimestamp + iFmtTimestamp);
-                                                        if (TimeDelta > 2000)
-                                                            TimeDelta = 0;
-                                                    }
-
-                                                    if (iLastVideoTimestamp > 0)
-                                                        iLastVideoTimestamp = (int)(iLastVideoTimestamp + TimeDelta);
-
-                                                    iFmtLastVideoTimestamp = iFmtTimestamp;
 
                                                     try { VideoBody = (RTMPBodyVideoData)ServerR.Body; }
                                                     catch (Exception ex) { Console.WriteLine("Video packet invalid"); }
@@ -510,7 +707,7 @@ namespace RTMPLibrary
                                                     {
                                                         // Console.WriteLine("VideoData TimeDelta:" & TimeDelta & ", CompositionTime:" & VideoBody.CompositionTime)
                                                         // RaiseEvent VideoData(Me, TimeDelta, ServerR.Body)
-                                                        VideoData?.Invoke(this, TimeDelta, VideoBody);
+                                                        VideoData?.Invoke(this, ServerR.Head.Timestamp, VideoBody);
                                                         // RaiseEvent VideoData(Me, 0, ServerR.Body)
                                                     }
 
@@ -519,39 +716,13 @@ namespace RTMPLibrary
                                             case RTMPHead.enumTypeID.AudioData:
                                                 {
                                                     RTMPBodyAudioData AudioBody = null;
-                                                    uint TimeDelta = 0; // ServerR.Head.Timestamp
 
-                                                    if (iFmtTimestamp >= iFmtLastAudioTimestamp)
-                                                    {
-                                                        TimeDelta = (uint)(iFmtTimestamp - iFmtLastAudioTimestamp);
-                                                    }
-                                                    else
-                                                    {
-                                                        TimeDelta = (uint)Math.Abs(0xFFFFFF - iFmtLastAudioTimestamp + iFmtTimestamp);
-                                                        if (TimeDelta > 2000)
-                                                        {
-                                                            TimeDelta = 0U;
-                                                        }
-                                                    }
-
-                                                    if (iLastAudioTimestamp > 0)
-                                                    {
-                                                        iLastAudioTimestamp = (int)(iLastAudioTimestamp + TimeDelta);
-                                                    }
-
-                                                    iFmtLastAudioTimestamp = iFmtTimestamp;
-                                                    try
-                                                    {
-                                                        AudioBody = (RTMPBodyAudioData)ServerR.Body;
-                                                    }
-                                                    catch (Exception ex)
-                                                    {
-                                                        Console.WriteLine("Video packet invalid");
-                                                    }
+                                                    try { AudioBody = (RTMPBodyAudioData)ServerR.Body; }
+                                                    catch (Exception ex) { Console.WriteLine("Audio packet invalid"); }
 
                                                     if (AudioBody != null)
                                                     {
-                                                        AudioData?.Invoke(this, TimeDelta, AudioBody);
+                                                        AudioData?.Invoke(this, ServerR.Head.Timestamp, AudioBody);
                                                     }
 
                                                     break;
@@ -685,28 +856,40 @@ namespace RTMPLibrary
 
                                                         if (PlayResult.CommandName.Value == "onStatus")
                                                         {
-                                                            AMF0Objects.AMF0String AMFStringCode = null;
-
-                                                            AMFStringCode = (AMF0Objects.AMF0String)PlayResult.Information.GetValue("code");
-
-                                                            if (AMFStringCode != null)
+                                                            if (PlayResult.code != null)
                                                             {
-                                                                OnCommandStatus?.Invoke(this, AMFStringCode.Value, PlayResult);
+                                                                OnCommandStatus?.Invoke(this, PlayResult.code, PlayResult);
 
-                                                                if (AMFStringCode.Value.ToUpper().Contains("Play.Start".ToUpper()))
+                                                                if (iIsPublishMode)
                                                                 {
-                                                                    if (iBeginStreamReceived == false)
+                                                                    // publish 
+                                                                    if (PlayResult.code.ToUpper().Contains("Publish.Start".ToUpper()))
                                                                     {
-                                                                        iConnectState = enumRTMPConnectState.GetPlayResult;
+                                                                        iConnectState = enumRTMPConnectState.Publish;
                                                                     }
                                                                     else
                                                                     {
-                                                                        iConnectState = enumRTMPConnectState.BeginStream;
+                                                                        // other event
                                                                     }
                                                                 }
                                                                 else
                                                                 {
-                                                                    // other event
+                                                                    // play
+                                                                    if (PlayResult.code.ToUpper().Contains("Play.Start".ToUpper()))
+                                                                    {
+                                                                        if (iBeginStreamReceived == false)
+                                                                        {
+                                                                            iConnectState = enumRTMPConnectState.GetPlayResult;
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            iConnectState = enumRTMPConnectState.BeginStream;
+                                                                        }
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        // other event
+                                                                    }
                                                                 }
                                                             }
                                                             else
@@ -816,74 +999,91 @@ namespace RTMPLibrary
                             case enumRTMPConnectState.GetConnectResult:
                                 {
                                     List<byte> SendContentArray = new List<byte>();
-                                    // 發送 Window ack
-                                    RTMPBodyWindowSize WindowBody = new RTMPBodyWindowSize();
 
-                                    WindowBody.WindowSize = (uint)iClientWindowAckSize;
-                                    SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type0, 2, 0, RTMPHead.enumTypeID.SetWindowSize, 0, WindowBody));
+                                    if (iIsPublishMode)
+                                    {
+                                        // Push stream
+                                        // 發送 SetChunkSize
+                                        RTMPBodyChunkSize ClientChunkSize = new RTMPBodyChunkSize();
+                                        ClientChunkSize.ChunkSize = 4096;
+                                        SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type0, 2, 0, RTMPHead.enumTypeID.SetChunkSize, 0, ClientChunkSize));
+
+                                        // 發送 ReleaseStream
+                                        AMFCommand.ReleaseStream RelStream = new AMFCommand.ReleaseStream(iTransactionID++, iStreamName);
+                                        SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type1, 3, 0, RTMPHead.enumTypeID.AMF0Command, 0, RelStream.GetBody));
+
+                                        // 發送 FCPublish
+                                        AMFCommand.FCPublish FCPub = new AMFCommand.FCPublish(iTransactionID++, iStreamName);
+                                        SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type1, 3, 0, RTMPHead.enumTypeID.AMF0Command, 0, RelStream.GetBody));
+                                    }
+                                    else
+                                    {
+                                        // Pull stream
+
+                                        // 發送 Window ack
+                                        RTMPBodyWindowSize WindowBody = new RTMPBodyWindowSize();
+
+                                        WindowBody.WindowSize = (uint)iClientWindowAckSize;
+                                        SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type0, 2, 0, RTMPHead.enumTypeID.SetWindowSize, 0, WindowBody));
+                                    }
 
                                     // 發送 CreateStream
-                                    AMFCommand.CreateStream ConnectBody = null;
-
-                                    ConnectBody = new AMFCommand.CreateStream(2);
+                                    AMFCommand.CreateStream ConnectBody = new AMFCommand.CreateStream(iTransactionID++);
                                     SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type1, 3, 0, RTMPHead.enumTypeID.AMF0Command, 0, ConnectBody.GetBody));
+                                    iTCP.SendData(SendContentArray.ToArray());
+
+                                    SendContentArray.Clear();
+
+                                    iConnectState = enumRTMPConnectState.CreateStream;  // 等待 Result
+                                }
+
+                                break;
+                            case enumRTMPConnectState.GetCreateStreamResult:
+                                {
+                                    List<byte> SendContentArray = new List<byte>();
+
+                                    if (iIsPublishMode)
+                                    {
+                                        // 發送 publish
+                                        AMFCommand.Publish pubBody = new AMFCommand.Publish(iTransactionID++, iStreamName, iAppName);
+                                        SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type0, 8, 0, RTMPHead.enumTypeID.AMF0Command, iPlayStreamID, pubBody.GetBody));
+                                    }
+                                    else
+                                    {
+                                        // 發送 Play
+                                        AMFCommand.GetStreamLength StreamLenBody = new AMFCommand.GetStreamLength();
+                                        StreamLenBody.StreamName.Value = iStreamName;
+                                        StreamLenBody.TransactionID.Value = iTransactionID++;
+                                        SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type0, 8, 0, RTMPHead.enumTypeID.AMF0Command, 0, StreamLenBody.GetBody));
+
+                                        AMFCommand.Play PlayBody = new AMFCommand.Play();
+                                        PlayBody.StreamName.Value = iStreamName;
+                                        PlayBody.TransactionID.Value = iTransactionID++;
+                                        SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type0, 8, 0, RTMPHead.enumTypeID.AMF0Command, iPlayStreamID, PlayBody.GetBody));
+
+                                        UCM.SetBufferLength BufferLengthBody = new UCM.SetBufferLength();
+                                        BufferLengthBody.StreamID = 1;
+                                        BufferLengthBody.BufferLength = (uint)iBufferLengthMS;
+                                        SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type1, 2, 0, RTMPHead.enumTypeID.UserControlMsg, 0, BufferLengthBody));
+                                    }
+
                                     iTCP.SendData(SendContentArray.ToArray());
                                     SendContentArray.Clear();
 
-                                    // ' 發送 SetBufferLength
-                                    // Dim BufferLengthBody As New RTMPBodyUCM_SetBufferLength
-                                    // BufferLengthBody.StreamID = 0
-                                    // BufferLengthBody.BufferLength = iBufferLengthMS
-                                    // SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type1, 2, 0, RTMPHead.enumTypeID.UserControlMsg, 0, BufferLengthBody))
-
-                                    // ' 發送 CheckBandwidth
-                                    // Dim CheckBandwidthBody As New RTMPBodyAMFBase
-                                    // CheckBandwidthBody.AMF0List.Add(New AMF0String With {.Value = "checkBandwidth"})
-                                    // CheckBandwidthBody.AMF0List.Add(New AMF0Number With {.Value = 0})
-                                    // CheckBandwidthBody.AMF0List.Add(New AMF0Null)
-                                    // SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type1, 3, 0, RTMPHead.enumTypeID.AMF3Command, 0, CheckBandwidthBody))
-
-                                    // iTCP.SendData2(SendContentArray.ToArray)
-
-                                    iConnectState = enumRTMPConnectState.CreateStream;  // 等待 Result
-
-                                    break;
-                                }
-                            case enumRTMPConnectState.GetCreateStreamResult:
-                                {
-                                    // 發送 Play
-                                    List<byte> SendContentArray = new List<byte>();
-                                    int TmpIndex;
-                                    string PlayStreamName;
-
-                                    TmpIndex = iUrl.LastIndexOf("/");
-                                    if (TmpIndex != -1)
-                                        PlayStreamName = iUrl.Substring(TmpIndex + 1);
-                                    else
-                                        PlayStreamName = iUrl;
-
-                                    AMFCommand.GetStreamLength StreamLenBody = new AMFCommand.GetStreamLength();
-                                    StreamLenBody.StreamName.Value = PlayStreamName;
-                                    StreamLenBody.TransactionID.Value = 3;
-                                    SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type0, 8, 0, RTMPHead.enumTypeID.AMF0Command, 0, StreamLenBody.GetBody));
-
-                                    AMFCommand.Play PlayBody = new AMFCommand.Play();
-                                    PlayBody.StreamName.Value = PlayStreamName;
-                                    PlayBody.TransactionID.Value = 4;
-                                    SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type0, 8, 0, RTMPHead.enumTypeID.AMF0Command, iPlayStreamID, PlayBody.GetBody));
-
-                                    UCM.SetBufferLength BufferLengthBody = new UCM.SetBufferLength();
-                                    BufferLengthBody.StreamID = 1;
-                                    BufferLengthBody.BufferLength = (uint)iBufferLengthMS;
-                                    SendContentArray.AddRange(GetRTMPBodyArray(RTMPHead.enumFmtType.Type1, 2, 0, RTMPHead.enumTypeID.UserControlMsg, 0, BufferLengthBody));
-
-                                    iTCP.SendData(SendContentArray.ToArray());
-
                                     iConnectState = enumRTMPConnectState.Play;
-
-                                    break;
                                 }
 
+                                break;
+                            case enumRTMPConnectState.Publish:
+                                {
+                                    if (iAVConfigSet)
+                                    {
+                                        SendDataFrame();
+                                        iConnectState = enumRTMPConnectState.BeginPublish;
+                                    }
+                                }
+
+                                break;
                             default:
                                 {
                                     if ((iTotalBodyBytes - iLastACKValue) >= (iServerWindowAckSize / 2))
@@ -896,12 +1096,112 @@ namespace RTMPLibrary
                                         iLastACKValue = iTotalBodyBytes;
                                     }
 
-                                    break;
                                 }
+
+                                break;
                         }
                     }
 
                     break;
+            }
+        }
+
+        private void SendDataFrame()
+        {
+            AMFCommand.setDataFrame DataFrame = new AMFCommand.setDataFrame();
+            RTMPBodyVideoData RTMPFirstVideoBody = null;
+            RTMPBodyAudioData RTMPFirstAudioBody = null;
+
+            DataFrame.Information.AddToProperties("title", new AMF0Objects.AMF0String() { Value = "RTMPLibrary" });
+            DataFrame.Information.AddToProperties("encoder", new AMF0Objects.AMF0String() { Value = "" });
+
+            if (iEnableVideoTrack)
+            {
+                if ((H264SPSConfig != null) && (H264PPSConfig != null))
+                {
+                    SPSParsing Parsing = new SPSParsing();
+                    SPSParsing.SeqParameterSet SPS = null;
+                    int iVideoWidth = 1024;
+                    int iVideoHeight = 768;
+
+                    try { SPS = Parsing.seq_parameter_set_rbsp(H264SPSConfig); }
+                    catch (Exception ex) { }
+
+                    if (SPS != null)
+                    {
+                        iVideoWidth = SPS.Width();
+                        iVideoHeight = SPS.Height();
+                    }
+
+                    DataFrame.Information.AddToProperties("videocodecid", new AMF0Objects.AMF0Number() { Value = 7 });
+                    DataFrame.Information.AddToProperties("width", new AMF0Objects.AMF0Number() { Value = iVideoWidth });
+                    DataFrame.Information.AddToProperties("height", new AMF0Objects.AMF0Number() { Value = iVideoHeight });
+                    DataFrame.Information.AddToProperties("videodatarate", new AMF0Objects.AMF0Number() { Value = 0 });
+                }
+            }
+
+            if (iEnableAudioTrack)
+            {
+                if (AACConfig != null)
+                {
+                    AACConfigDecoder ACD = new AACConfigDecoder();
+
+                    ACD.AACConfigDecode(AACConfig);
+
+                    DataFrame.Information.AddToProperties("audiocodecid", new AMF0Objects.AMF0Number() { Value = 10 });
+                    DataFrame.Information.AddToProperties("audiodatarate", new AMF0Objects.AMF0Number() { Value = 0 });
+                    DataFrame.Information.AddToProperties("audiosamplerate", new AMF0Objects.AMF0Number() { Value = ACD.sampleFrequency });
+                    DataFrame.Information.AddToProperties("audiosamplesize", new AMF0Objects.AMF0Number() { Value = 16 });
+
+                    if (ACD.channelConfig >= 2)
+                        DataFrame.Information.AddToProperties("stereo", new AMF0Objects.AMF0Boolean() { Value = true });
+                    else
+                        DataFrame.Information.AddToProperties("stereo", new AMF0Objects.AMF0Boolean() { Value = false });
+                }
+            }
+
+
+            SendRTMPBody(RTMPHead.enumFmtType.Type0, 4, 0, RTMPHead.enumTypeID.AMF0Data, iPlayStreamID, DataFrame.GetBody);
+            if (iEnableVideoTrack)
+            {
+                if (iVideoFirstFrameRaised == false)
+                {
+                    if ((H264SPSConfig != null) && (H264PPSConfig != null))
+                    {
+                        if (RTMPFirstVideoBody != null)
+                        {
+                            // 第一次傳送 KeyFrame
+                            // 包含 RTMP Video Header
+                            RTMPFirstVideoBody = RTMPBodyVideoData.ImportSPS(H264SPSConfig, H264PPSConfig);
+
+                            SendRTMPBody(RTMPHead.enumFmtType.Type0, 7, 0, RTMPHead.enumTypeID.VideoData, iPlayStreamID, RTMPFirstVideoBody);
+                            iVideoFirstFrameRaised = true;
+                        }
+                    }
+                }
+            }
+
+            if (iEnableAudioTrack)
+            {
+                if (iAudioFirstFrameRaised == false)
+                {
+                    if (AACConfig != null)
+                    {
+                        byte[] AudioConfigData;
+
+                        AudioConfigData = (byte[])Array.CreateInstance(typeof(byte), AACConfig.Length + 1);
+                        AudioConfigData[0] = 0;
+                        Array.Copy(AACConfig, 0, AudioConfigData, 1, AACConfig.Length);
+
+                        // 第一次傳送 KeyFrame
+                        // 包含 RTMP Video Header
+                        RTMPFirstAudioBody = new RTMPBodyAudioData();
+                        RTMPFirstAudioBody.AudioData = AudioConfigData;
+
+                        SendRTMPBody(RTMPHead.enumFmtType.Type1, 4, 0, RTMPHead.enumTypeID.AudioData, iPlayStreamID, RTMPFirstAudioBody);
+                        iAudioFirstFrameRaised = true;
+                    }
+                }
             }
         }
 

@@ -81,17 +81,11 @@ namespace RTMPLibrary
 
         public byte[] AudioData
         {
-            get
-            {
-                return iAudioData;
-            }
-            set
-            {
-                iAudioData = value;
-            }
+            get { return iAudioData; }
+            set { iAudioData = value; }
         }
 
-        private RTMPBodyAudioData()
+        public RTMPBodyAudioData()
         {
             iCodec = enumAudioCodec.AAC;
             iSampleRate = enumSampleRate.SR_44K;

@@ -14,9 +14,9 @@
             get { return (AMF0Objects.AMF0String)iRTMPBodyAMFBase.AMF0List[0]; }
         }
 
-        public AMF0Objects.AMF0Object Information
+        public AMF0Objects.AMF0EMCAArray Information
         {
-            get { return (AMF0Objects.AMF0Object)iRTMPBodyAMFBase.AMF0List[2]; }
+            get { return (AMF0Objects.AMF0EMCAArray)iRTMPBodyAMFBase.AMF0List[2]; }
         }
 
         public setDataFrame()
@@ -26,17 +26,17 @@
             iRTMPBodyAMFBase.AMF0List.Add(new AMF0Objects.AMF0String() { Value = "onMetaData" });
             iRTMPBodyAMFBase.AMF0List.Add(new AMF0Objects.AMF0EMCAArray());
 
-            Information.AddToProperties("width", new AMF0Objects.AMF0Number());
-            Information.AddToProperties("height", new AMF0Objects.AMF0Number());
-            Information.AddToProperties("videodatarate", new AMF0Objects.AMF0Number());
-            Information.AddToProperties("videocodecid", new AMF0Objects.AMF0Number());
-            Information.AddToProperties("audiodatarate", new AMF0Objects.AMF0Number());
-            Information.AddToProperties("audiosamplerate", new AMF0Objects.AMF0Number());
-            Information.AddToProperties("audiosamplesize", new AMF0Objects.AMF0Number());
-            Information.AddToProperties("stereo", new AMF0Objects.AMF0Number());
-            Information.AddToProperties("audiocodecid", new AMF0Objects.AMF0Number());
-            Information.AddToProperties("title", new AMF0Objects.AMF0String());
-            Information.AddToProperties("encoder", new AMF0Objects.AMF0String());
+            //Information.AddToProperties("width", new AMF0Objects.AMF0Number());
+            //Information.AddToProperties("height", new AMF0Objects.AMF0Number());
+            //Information.AddToProperties("videodatarate", new AMF0Objects.AMF0Number());
+            //Information.AddToProperties("videocodecid", new AMF0Objects.AMF0Number());
+            //Information.AddToProperties("audiodatarate", new AMF0Objects.AMF0Number());
+            //Information.AddToProperties("audiosamplerate", new AMF0Objects.AMF0Number());
+            //Information.AddToProperties("audiosamplesize", new AMF0Objects.AMF0Number());
+            //Information.AddToProperties("stereo", new AMF0Objects.AMF0Boolean());
+            //Information.AddToProperties("audiocodecid", new AMF0Objects.AMF0Number());
+            //Information.AddToProperties("title", new AMF0Objects.AMF0String());
+            //Information.AddToProperties("encoder", new AMF0Objects.AMF0String());
         }
 
         public setDataFrame(AMFCommandBody Body)
