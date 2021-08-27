@@ -111,7 +111,7 @@
 
         vreturn = 1 << zeros;
 
-        for (int i = zeros - 1; i >= 0; i -= 1)
+        for (int i = zeros - 1; i >= 0; i--)
         {
             vTmp = get_bit(bbase, vIdx);
             vreturn = vreturn | (vTmp << i);

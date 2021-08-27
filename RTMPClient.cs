@@ -501,7 +501,7 @@ namespace RTMPLibrary
                 iTcUrl = "rtmp://" + iServerName + ":" + iPort;
                 if (PathArray.Length >= 2)
                 {
-                    for (int I = 0, loopTo = PathArray.Length - 2; I <= loopTo; I++)
+                    for (int I = 0; I <= PathArray.Length - 2; I++)
                         iTcUrl = iTcUrl + "/" + PathArray[I];
                 }
             }
