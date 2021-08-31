@@ -61,19 +61,19 @@ namespace RTMPLibrary
             set { iCodec = value; }
         }
 
-        private enumSampleRate SampleRate
+        public enumSampleRate SampleRate
         {
             get { return iSampleRate; }
             set { iSampleRate = value; }
         }
 
-        private enumBitDepth BitDepth
+        public enumBitDepth BitDepth
         {
             get { return iBitDepth; }
             set { iBitDepth = value; }
         }
 
-        private enumChannel Channel
+        public enumChannel Channel
         {
             get { return iChannel; }
             set { iChannel = value; }
