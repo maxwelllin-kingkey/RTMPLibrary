@@ -46,7 +46,6 @@ namespace RTMPLibrary
         private byte[] H264SPSConfig = null;
         private byte[] H264PPSConfig = null;
         private byte[] AACConfig = null;
-        private bool IsStereoAudio = true;
 
         public string tcUrl;
         public string swfUrl;
@@ -142,19 +141,6 @@ namespace RTMPLibrary
                             AACConfig = EachAVC.ConfigValue;
                             iEnableAudioTrack = true;
                             break;
-                    }
-                }
-
-                if (iEnableAudioTrack) {
-                    if (AACConfig != null) {
-                        // try to decode
-                        AACConfigDecoder ACD = new AACConfigDecoder();
-
-                        ACD.AACConfigDecode(AACConfig);
-                        if (ACD.channelConfig >= 2)
-                            IsStereoAudio = true;
-                        else
-                            IsStereoAudio = false;
                     }
                 }
 
@@ -275,12 +261,6 @@ namespace RTMPLibrary
                                 // 第一次傳送 KeyFrame
                                 // 包含 RTMP Video Header
                                 RTMPFirstAudioBody = new RTMPBodyAudioData();
-
-                                if (IsStereoAudio)
-                                    RTMPFirstAudioBody.Channel = RTMPBodyAudioData.enumChannel.Stereo;
-                                else
-                                    RTMPFirstAudioBody.Channel = RTMPBodyAudioData.enumChannel.Mono;
-
                                 RTMPFirstAudioBody.AudioData = AudioConfigData;
 
                                 SendRTMPBody(RTMPHead.enumFmtType.Type1, 4, TimeDeltaMS, RTMPHead.enumTypeID.AudioData, iPlayStreamID, RTMPFirstAudioBody);
@@ -299,12 +279,6 @@ namespace RTMPLibrary
                     Array.Copy(AudioData, Offset, AudioCopyData, 0, AudioCopyData.Length);
 
                     AudioBody = new RTMPBodyAudioData();
-
-                    if (IsStereoAudio)
-                        AudioBody.Channel = RTMPBodyAudioData.enumChannel.Stereo;
-                    else
-                        AudioBody.Channel = RTMPBodyAudioData.enumChannel.Mono;
-
                     AudioBody.AudioData = AudioCopyData;
 
                     SendRTMPBody(RTMPHead.enumFmtType.Type1, 4, TimeDeltaMS, RTMPHead.enumTypeID.AudioData, iPlayStreamID, AudioBody);
@@ -703,11 +677,6 @@ namespace RTMPLibrary
 
                                                                     if (AudioBody != null)
                                                                     {
-                                                                        if (IsStereoAudio)
-                                                                            AudioBody.Channel = RTMPBodyAudioData.enumChannel.Stereo;
-                                                                        else
-                                                                            AudioBody.Channel = RTMPBodyAudioData.enumChannel.Mono;
-
                                                                         AudioData?.Invoke(this, (uint)EachMsg.Timestamp - ServerR.Head.Timestamp, AudioBody);
                                                                     }
 
@@ -753,11 +722,6 @@ namespace RTMPLibrary
 
                                                     if (AudioBody != null)
                                                     {
-                                                        if (IsStereoAudio)
-                                                            AudioBody.Channel = RTMPBodyAudioData.enumChannel.Stereo;
-                                                        else
-                                                            AudioBody.Channel = RTMPBodyAudioData.enumChannel.Mono;
-
                                                         AudioData?.Invoke(this, ServerR.Head.Timestamp, AudioBody);
                                                     }
 
@@ -1188,17 +1152,7 @@ namespace RTMPLibrary
                     DataFrame.Information.AddToProperties("audiodatarate", new AMF0Objects.AMF0Number() { Value = 0 });
                     DataFrame.Information.AddToProperties("audiosamplerate", new AMF0Objects.AMF0Number() { Value = ACD.sampleFrequency });
                     DataFrame.Information.AddToProperties("audiosamplesize", new AMF0Objects.AMF0Number() { Value = 16 });
-
-                    if (ACD.channelConfig >= 2)
-                    {
-                        IsStereoAudio = true;
-                        DataFrame.Information.AddToProperties("stereo", new AMF0Objects.AMF0Boolean() { Value = true });
-                    }
-                    else
-                    {
-                        IsStereoAudio = false;
-                        DataFrame.Information.AddToProperties("stereo", new AMF0Objects.AMF0Boolean() { Value = false });
-                    }
+                    DataFrame.Information.AddToProperties("stereo", new AMF0Objects.AMF0Boolean() { Value = true });
                 }
             }
 
@@ -1238,12 +1192,6 @@ namespace RTMPLibrary
                         // 第一次傳送 KeyFrame
                         // 包含 RTMP Video Header
                         RTMPFirstAudioBody = new RTMPBodyAudioData();
-
-                        if (IsStereoAudio)
-                            RTMPFirstAudioBody.Channel = RTMPBodyAudioData.enumChannel.Stereo;
-                        else
-                            RTMPFirstAudioBody.Channel = RTMPBodyAudioData.enumChannel.Mono;
-
                         RTMPFirstAudioBody.AudioData = AudioConfigData;
 
                         SendRTMPBody(RTMPHead.enumFmtType.Type1, 4, 0, RTMPHead.enumTypeID.AudioData, iPlayStreamID, RTMPFirstAudioBody);
