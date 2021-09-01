@@ -78,6 +78,12 @@ namespace RTMPLibrary
         public delegate void DisconnectEventHandler(RTMPClient sender);
         public event DisconnectEventHandler Disconnect;
 
+        public enum enumAudioFrameType
+        {
+            AudioHeader,
+            AudioRaw
+        }
+
         public enum enumVideoFrameType
         {
             KeyFrame,
@@ -234,7 +240,7 @@ namespace RTMPLibrary
 
         }
 
-        public void SendAudio(byte[] AudioData, int Offset, int Length, int TimeDeltaMS)
+        public void SendAudio(enumAudioFrameType AudioFrameType, byte[] AudioData, int Offset, int Length, int TimeDeltaMS)
         {
             if (iConnectState == enumRTMPConnectState.BeginPublish)
             {
@@ -243,45 +249,39 @@ namespace RTMPLibrary
 
                 if (Length > 0)
                 {
-                    // Push 時, Timestamp 使用相同時間軸
-                    // 因此以 VideoTimestamp 為基礎
-                    if (iAudioFirstFrameRaised == false)
+                    if (AudioFrameType == enumAudioFrameType.AudioHeader)
                     {
-                        if (AudioData[Offset] != 0)
-                        {
-                            if (AACConfig != null)
-                            {
-                                RTMPBodyAudioData RTMPFirstAudioBody = null;
-                                byte[] AudioConfigData;
+                        // Push 時, Timestamp 使用相同時間軸
+                        // 因此以 VideoTimestamp 為基礎
+                        RTMPBodyAudioData RTMPFirstAudioBody = null;
+                        byte[] AudioConfigData;
 
-                                AudioConfigData = (byte[])Array.CreateInstance(typeof(byte), AACConfig.Length + 1);
-                                AudioConfigData[0] = 0x00;
-                                Array.Copy(AACConfig, 0, AudioConfigData, 1, AACConfig.Length);
+                        AudioConfigData = (byte[])Array.CreateInstance(typeof(byte), Length + 1);
+                        AudioConfigData[0] = 0x00;
+                        Array.Copy(AudioData, Offset, AudioConfigData, 1, Length);
 
-                                // 第一次傳送 KeyFrame
-                                // 包含 RTMP Video Header
-                                RTMPFirstAudioBody = new RTMPBodyAudioData();
-                                RTMPFirstAudioBody.AudioData = AudioConfigData;
+                        // 第一次傳送 KeyFrame
+                        // 包含 RTMP Video Header
+                        RTMPFirstAudioBody = new RTMPBodyAudioData();
+                        RTMPFirstAudioBody.AudioData = AudioConfigData;
 
-                                SendRTMPBody(RTMPHead.enumFmtType.Type1, 4, TimeDeltaMS, RTMPHead.enumTypeID.AudioData, iPlayStreamID, RTMPFirstAudioBody);
-                                iAudioFirstFrameRaised = true;
-                            }
-                        }
-                        else
-                        {
-                            // AAC first byte 0 is config data
-                            iAudioFirstFrameRaised = true;
-                        }
+                        AACConfig = AudioConfigData;
+
+                        SendRTMPBody(RTMPHead.enumFmtType.Type1, 4, TimeDeltaMS, RTMPHead.enumTypeID.AudioData, iPlayStreamID, RTMPFirstAudioBody);
+                        iAudioFirstFrameRaised = true;
                     }
+                    else if (AudioFrameType == enumAudioFrameType.AudioRaw)
+                    {
+                        // Console.WriteLine("Video frame:" & VideoData(VideoOffset + 0) & ":" & VideoData(VideoOffset + 1) & ":" & VideoData(VideoOffset + 2) & ":" & VideoData(VideoOffset + 3))
+                        AudioCopyData = (byte[])Array.CreateInstance(typeof(byte), Length + 1);
+                        AudioCopyData[0] = 0x01;
+                        Array.Copy(AudioData, Offset, AudioCopyData, 1, Length);
 
-                    // Console.WriteLine("Video frame:" & VideoData(VideoOffset + 0) & ":" & VideoData(VideoOffset + 1) & ":" & VideoData(VideoOffset + 2) & ":" & VideoData(VideoOffset + 3))
-                    AudioCopyData = (byte[])Array.CreateInstance(typeof(byte), Length);
-                    Array.Copy(AudioData, Offset, AudioCopyData, 0, AudioCopyData.Length);
+                        AudioBody = new RTMPBodyAudioData();
+                        AudioBody.AudioData = AudioCopyData;
 
-                    AudioBody = new RTMPBodyAudioData();
-                    AudioBody.AudioData = AudioCopyData;
-
-                    SendRTMPBody(RTMPHead.enumFmtType.Type1, 4, TimeDeltaMS, RTMPHead.enumTypeID.AudioData, iPlayStreamID, AudioBody);
+                        SendRTMPBody(RTMPHead.enumFmtType.Type1, 4, TimeDeltaMS, RTMPHead.enumTypeID.AudioData, iPlayStreamID, AudioBody);
+                    }
                 }
             }
         }
