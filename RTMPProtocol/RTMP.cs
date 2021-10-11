@@ -1,11 +1,16 @@
-﻿namespace RTMPLibrary
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+
+namespace RTMPLibrary
 {
     public partial class RTMP
     {
         public RTMPHead Head = null;
         public RTMPBodyBase Body = null;
         public bool IsFmtType2 = false;
-        private System.Collections.Generic.Dictionary<int, RTMPHead> iChunkStreamList = new System.Collections.Generic.Dictionary<int, RTMPHead>();
+        public bool ExtendedTimestamp = false;
+        private Dictionary<int, RTMPChunkStream> iChunkStreamList = new Dictionary<int, RTMPChunkStream>();
 
         public int IsDataAvailable(byte[] ArrayValue, int ArraySize, int ChunkSize, ref int NeedPacketSize)
         {
@@ -66,6 +71,7 @@
                             (ArrayValue[NeedDataLength1 + 1] == 0xFF) &&
                             (ArrayValue[NeedDataLength1 + 2] == 0xFF))
                         {
+                            ExtendedTimestamp = true;
                             NeedDataLength2 += 4;
                         }
                     }
@@ -76,14 +82,15 @@
                         int ChunkCount;
                         int BodySize = 0;
 
-                        Head = new RTMPHead(ArrayValue);
+                        Head = new RTMPHead(ArrayValue, 0);
                         if ((Head.FmtType == RTMPHead.enumFmtType.Type2) || (Head.FmtType == RTMPHead.enumFmtType.Type3))
                         {
                             // Type2
                             // 長度與上一封包相同
                             if (iChunkStreamList.ContainsKey(Head.ChunkStreamID))
                             {
-                                RTMPHead iLastHead = this.iChunkStreamList[Head.ChunkStreamID];
+                                RTMPChunkStream RCS = this.iChunkStreamList[Head.ChunkStreamID];
+                                RTMPHead iLastHead = RCS.Head;
 
                                 BodySize = iLastHead.BodySize;
                             }
@@ -115,7 +122,10 @@
                         NeedPacketSize = BodySize + NeedDataLength2 + ChunkCount;
                         if (ArraySize >= BodySize + NeedDataLength2 + ChunkCount)
                         {
-                            RetValue = BodySize + NeedDataLength2 + ChunkCount;
+                            if (ExtendedTimestamp == false)
+                                RetValue = BodySize + NeedDataLength2 + ChunkCount;
+                            else
+                                RetValue = BodySize + NeedDataLength2 + ChunkCount + (ChunkCount * 4);
                         }
                     }
                 }
@@ -124,11 +134,12 @@
             return RetValue;
         }
 
-        public RTMP ParsingFromArray(byte[] Value, int ValueArraySize, int ChunkSize = 128)
+        public RTMP ParsingFromArray(byte[] Value, int ValueArraySize, int ChunkSize, out int ProcessBytes)
         {
             RTMP RetValue = null;
             int PacketSize;
             int argNeedPacketSize = 0;
+            int OutBytes = 0;
 
             PacketSize = IsDataAvailable(Value, ValueArraySize, ChunkSize, ref argNeedPacketSize);
             if (PacketSize != -1)
@@ -141,18 +152,20 @@
                 byte[] BodyArray = null;
                 byte[] BodyValue = null;
 
-                RTMPArray = (byte[])System.Array.CreateInstance(typeof(byte), PacketSize);
-                System.Array.Copy(Value, 0, RTMPArray, 0, RTMPArray.Length);
+                RTMPArray = (byte[])Array.CreateInstance(typeof(byte), PacketSize);
+                Array.Copy(Value, 0, RTMPArray, 0, RTMPArray.Length);
 
-                TmpHead = new RTMPHead(RTMPArray);
+                TmpHead = new RTMPHead(RTMPArray, 0);
+
                 BodyOffset = TmpHead.HeaderSize;
                 if ((TmpHead.FmtType == RTMPHead.enumFmtType.Type2) || (TmpHead.FmtType == RTMPHead.enumFmtType.Type3))
                 {
                     if (iChunkStreamList.ContainsKey(TmpHead.ChunkStreamID))
                     {
+                        RTMPChunkStream RCS = this.iChunkStreamList[Head.ChunkStreamID];
                         RTMPHead PrevHead;
 
-                        PrevHead = this.iChunkStreamList[TmpHead.ChunkStreamID];
+                        PrevHead = RCS.Head;
 
                         TmpHead.BodySize = PrevHead.BodySize;
                         TmpHead.ChunkStreamID = PrevHead.ChunkStreamID;
@@ -165,16 +178,21 @@
                 }
                 else if (iChunkStreamList.ContainsKey(TmpHead.ChunkStreamID))
                 {
-                    this.iChunkStreamList[TmpHead.ChunkStreamID] = TmpHead;
+                    this.iChunkStreamList[TmpHead.ChunkStreamID].Head = TmpHead;
                 }
                 else
                 {
-                    iChunkStreamList.Add(TmpHead.ChunkStreamID, TmpHead);
+                    RTMPChunkStream RCS = new RTMPChunkStream();
+
+                    RCS.Head = TmpHead;
+                    iChunkStreamList.Add(TmpHead.ChunkStreamID, RCS);
                 }
 
                 Head = TmpHead;
                 BodyArray = (byte[])System.Array.CreateInstance(typeof(byte), RTMPArray.Length - BodyOffset);
-                System.Array.Copy(RTMPArray, BodyOffset, BodyArray, 0, BodyArray.Length);
+                Array.Copy(RTMPArray, BodyOffset, BodyArray, 0, BodyArray.Length);
+
+                System.Console.WriteLine("ChunkStreamID:" + Head.ChunkStreamID + ", Type=" + Head.FmtType + ", BodySize=" + Head.BodySize);
                 if ((Head.BodySize > ChunkSize) && (ChunkSize != -1))
                 {
                     System.Collections.Generic.List<byte> BodyList = new System.Collections.Generic.List<byte>();
@@ -187,30 +205,60 @@
                     BodyTmpArrayList.CopyTo(0, ChunkBody, 0, ChunkBody.Length);
                     BodyTmpArrayList.RemoveRange(0, ChunkBody.Length);
                     BodyList.AddRange(ChunkBody);
+
+                    OutBytes += (Head.HeaderSize + ChunkBody.Length);
+
                     for (int _Loop = 1; _Loop <= 1000; _Loop++)
                     {
                         RTMPHead ChunkHead = null;
+                        long ChunkTimestamp;
 
                         if (BodyTmpArrayList.Count <= 0)
                             break;
 
-                        ChunkHead = new RTMPHead(BodyTmpArrayList.InternalBuffer);
+                        if (BodyList.Count >= Head.BodySize)
+                            break;
+
+                        ChunkHead = new RTMPHead(BodyTmpArrayList.InternalBuffer, 0);
+                        System.Console.WriteLine("ChunkStreamID-2:" + ChunkHead.ChunkStreamID + ", Type=" + ChunkHead.FmtType + ", BodySize=" + ChunkHead.BodySize);
 
                         if (ChunkHead.ChunkStreamID == Head.ChunkStreamID)
                         {
                             BodyTmpArrayList.RemoveRange(0, ChunkHead.HeaderSize);
-                            if (BodyTmpArrayList.Count <= ChunkSize)
+
+                            if (Head.HasExtendedTimestamp)
                             {
-                                ChunkBody = (byte[])System.Array.CreateInstance(typeof(byte), BodyTmpArrayList.Count);
+                                // Header 後面跟隨 4 bytes timestamp
+                                ChunkTimestamp = (long)System.Math.Round(BodyTmpArrayList[0] * System.Math.Pow(256d, 3d) +
+                                                                     BodyTmpArrayList[1] * System.Math.Pow(256d, 2d) +
+                                                                     BodyTmpArrayList[2] * 256 +
+                                                                     BodyTmpArrayList[3]);
+
+                                BodyTmpArrayList.RemoveRange(0, 4);
+                                OutBytes += 4;
+                            }
+
+                            if ((Head.BodySize - BodyList.Count) >= ChunkSize)
+                            {
+                                if (BodyTmpArrayList.Count <= ChunkSize)
+                                {
+                                    ChunkBody = (byte[])System.Array.CreateInstance(typeof(byte), BodyTmpArrayList.Count);
+                                }
+                                else
+                                {
+                                    ChunkBody = (byte[])System.Array.CreateInstance(typeof(byte), ChunkSize);
+                                }
                             }
                             else
                             {
-                                ChunkBody = (byte[])System.Array.CreateInstance(typeof(byte), ChunkSize);
+                                ChunkBody = (byte[])System.Array.CreateInstance(typeof(byte), (Head.BodySize - BodyList.Count));
                             }
 
                             BodyTmpArrayList.CopyTo(0, ChunkBody, 0, ChunkBody.Length);
                             BodyTmpArrayList.RemoveRange(0, ChunkBody.Length);
                             BodyList.AddRange(ChunkBody);
+
+                            OutBytes += (ChunkHead.HeaderSize + ChunkBody.Length);
                         }
                         else
                         {
@@ -218,67 +266,94 @@
                         }
                     }
 
-                    BodyValue = BodyList.ToArray();
+                    if (BodyList.Count >= Head.BodySize)
+                    {
+                        BodyValue = BodyList.ToArray();
+                    }
                 }
                 else
                 {
+                    OutBytes += (Head.HeaderSize + Head.BodySize);
                     BodyValue = BodyArray;
                 }
 
-                switch (Head.TypeID)
+
+                if (BodyValue != null)
                 {
-                    case RTMPHead.enumTypeID.AMF0Command:
-                        Body = new AMFCommand.AMFCommandBody(BodyValue, 0);
+                    switch (Head.TypeID)
+                    {
+                        case RTMPHead.enumTypeID.AMF0Command:
+                            Body = new AMFCommand.AMFCommandBody(BodyValue, 0);
 
-                        break;
-                    case RTMPHead.enumTypeID.AMF0Data:
-                        Body = new AMFCommand.AMFCommandBody(BodyValue, 0);
+                            break;
+                        case RTMPHead.enumTypeID.AMF0Data:
+                            Body = new AMFCommand.AMFCommandBody(BodyValue, 0);
 
-                        break;
-                    case RTMPHead.enumTypeID.AMF3Command:
-                        Body = new AMFCommand.AMFCommandBody(BodyValue, 1);
+                            break;
+                        case RTMPHead.enumTypeID.AMF3Command:
+                            Body = new AMFCommand.AMFCommandBody(BodyValue, 1);
 
-                        break;
-                    case RTMPHead.enumTypeID.SetPeerBandwidth:
-                        Body = new RTMPBodyPeerBandwidth(BodyValue, 0);
+                            break;
+                        case RTMPHead.enumTypeID.SetPeerBandwidth:
+                            Body = new RTMPBodyPeerBandwidth(BodyValue, 0);
 
-                        break;
-                    case RTMPHead.enumTypeID.SetWindowSize:
-                        Body = new RTMPBodyWindowSize(BodyValue, 0);
+                            break;
+                        case RTMPHead.enumTypeID.SetWindowSize:
+                            Body = new RTMPBodyWindowSize(BodyValue, 0);
 
-                        break;
-                    case RTMPHead.enumTypeID.SetChunkSize:
-                        Body = new RTMPBodyChunkSize(BodyValue, 0);
+                            break;
+                        case RTMPHead.enumTypeID.SetChunkSize:
+                            Body = new RTMPBodyChunkSize(BodyValue, 0);
 
-                        break;
-                    case RTMPHead.enumTypeID.VideoData:
-                        if (Head.BodySize > 5)
-                            Body = new RTMPBodyVideoData(BodyValue, 0, Head.BodySize);
+                            break;
+                        case RTMPHead.enumTypeID.VideoData:
+                            if (Head.BodySize > 5)
+                                Body = new RTMPBodyVideoData(BodyValue, 0, Head.BodySize);
 
-                        break;
-                    case RTMPHead.enumTypeID.AudioData:
-                        Body = new RTMPBodyAudioData(BodyValue, 0, Head.BodySize);
+                            break;
+                        case RTMPHead.enumTypeID.AudioData:
+                            Body = new RTMPBodyAudioData(BodyValue, 0, Head.BodySize);
 
-                        break;
-                    case RTMPHead.enumTypeID.UserControlMsg:
-                        Body = UCM.UCMBase.ParseUCM(BodyValue, 0);
+                            break;
+                        case RTMPHead.enumTypeID.UserControlMsg:
+                            Body = UCM.UCMBase.ParseUCM(BodyValue, 0);
 
-                        break;
-                    case RTMPHead.enumTypeID.Aggregate:
-                        Body = new RTMPBodyAggregate(BodyValue, 0, Head.BodySize);
+                            break;
+                        case RTMPHead.enumTypeID.Aggregate:
+                            Body = new RTMPBodyAggregate(BodyValue, 0, Head.BodySize);
 
-                        break;
-                    default:
-                        throw new System.Exception("Unknow TypeID:" + Head.TypeID);
+                            break;
+                        case RTMPHead.enumTypeID.AboutMsg:
+                            Body = new RTMPBodyAbort(BodyValue, 0);
+
+                            break;
+                        case RTMPHead.enumTypeID.Ack:
+                            Body = new RTMPBodyAcknowledgement(BodyValue, 0);
+
+                            break;
+                        case RTMPHead.enumTypeID.Unknow:
+                            break;
+                        default:
+                            throw new System.Exception("Unknow TypeID:" + Head.TypeID);
+                    }
+
+                    if (Body != null)
+                    {
+                        RetValue = new RTMP(Head, Body);
+
+                        if ((TmpHead.FmtType == RTMPHead.enumFmtType.Type2) || (TmpHead.FmtType == RTMPHead.enumFmtType.Type3))
+                        {
+                            RetValue.IsFmtType2 = true;
+                        }
+                    }
+
+                    ProcessBytes = OutBytes;
                 }
-
-                RetValue = new RTMP(Head, Body);
-
-                if ((TmpHead.FmtType == RTMPHead.enumFmtType.Type2) || (TmpHead.FmtType == RTMPHead.enumFmtType.Type3))
-                {
-                    RetValue.IsFmtType2 = true;
-                }
+                else
+                    ProcessBytes = 0;
             }
+            else
+                ProcessBytes = 0;
 
             return RetValue;
         }
@@ -383,6 +458,11 @@
             Head.FmtType = FmtType;
             Head.TypeID = TypeID;
             Body = RTMPBody;
+        }
+
+        internal class RTMPChunkStream {
+            public RTMPHead Head;
+            public UltimateByteArrayClass ContentArray;
         }
     }
 }

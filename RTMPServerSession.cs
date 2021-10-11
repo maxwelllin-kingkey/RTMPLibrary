@@ -423,104 +423,109 @@ namespace RTMPLibrary
                             TotalCount = iRTMP.IsDataAvailable(iRecvBuffer.InternalBuffer, iRecvBuffer.Count, _chunkSize, ref _NeedPacketSize);
                             if (TotalCount != -1)
                             {
-                                RTMP ClientR = default;
-                                ClientR = iRTMP.ParsingFromArray(iRecvBuffer.InternalBuffer, iRecvBuffer.Count, _chunkSize);
+                                RTMP ClientR = null;
+                                int OutBytes = 0;
 
-                                switch (ClientR.Head.TypeID)
+                                ClientR = iRTMP.ParsingFromArray(iRecvBuffer.InternalBuffer, iRecvBuffer.Count, _chunkSize, out OutBytes);
+
+                                if (ClientR != null)
                                 {
-                                    case RTMPHead.enumTypeID.AMF0Command:
-                                    case RTMPHead.enumTypeID.AMF3Command:
-                                        switch (iConnectionState)
+                                        switch (ClientR.Head.TypeID)
                                         {
-                                            case enumConnectionState.None:
-                                                // 預期 Connect
-                                                AMFCommand.Connect ConnectBody = new AMFCommand.Connect((AMFCommand.AMFCommandBody)ClientR.Body);
-
-                                                if (ConnectBody.CommandName.Value.ToUpper() == "connect".ToUpper())
+                                            case RTMPHead.enumTypeID.AMF0Command:
+                                            case RTMPHead.enumTypeID.AMF3Command:
+                                                switch (iConnectionState)
                                                 {
-                                                    AMF0Objects.AMF0String StreamName = null;
-                                                    AMF0Objects.AMF0Number objectEncoding = null;
+                                                    case enumConnectionState.None:
+                                                        // 預期 Connect
+                                                        AMFCommand.Connect ConnectBody = new AMFCommand.Connect((AMFCommand.AMFCommandBody)ClientR.Body);
 
-                                                    iConnectionState = enumConnectionState.Connect;
-                                                    iClientTransactionID = Convert.ToInt32(ConnectBody.TransactionID.Value);
-                                                    StreamName = (AMF0Objects.AMF0String)ConnectBody.CommandObject.GetValue("app");
-                                                    objectEncoding = (AMF0Objects.AMF0Number)ConnectBody.CommandObject.GetValue("objectEncoding");
-
-                                                    if (objectEncoding != null)
-                                                    {
-                                                        iObjectEncodingNumber = Convert.ToInt32(objectEncoding.Value);
-                                                    }
-
-                                                    if (StreamName != null)
-                                                    {
-                                                        RTMPCommandConnect?.Invoke(this, ConnectBody, StreamName.Value);
-                                                    }
-                                                    else
-                                                    {
-                                                        RTMPCommandConnect?.Invoke(this, ConnectBody, string.Empty);
-                                                    }
-                                                    // Else
-                                                    // RaiseEvent HandshakeException(Me)
-                                                    // Close()
-
-                                                    // Exit Do
-                                                }
-
-                                                break;
-                                            case enumConnectionState.Connect_Result:
-                                                // 預期 createStream
-                                                AMFCommand.CreateStream CreateStreamBody = new AMFCommand.CreateStream((AMFCommand.AMFCommandBody)ClientR.Body);
-
-                                                if (CreateStreamBody.CommandName.Value.ToUpper() == "createStream".ToUpper())
-                                                {
-                                                    iClientTransactionID = Convert.ToInt32(CreateStreamBody.TransactionID.Value);
-                                                    iConnectionState = enumConnectionState.CreateStream;
-
-                                                    RTMPCommandCreateStream?.Invoke(this, CreateStreamBody);
-                                                }
-
-                                                break;
-                                            case enumConnectionState.CreateStream_Result:
-                                                // 預期 play
-                                                AMFCommand.AMFCommandBody BaseBody = (AMFCommand.AMFCommandBody)ClientR.Body;
-
-                                                if (BaseBody.AMF0List.Count > 0)
-                                                {
-                                                    if (BaseBody.AMF0List[0].ObjectType == Common.enumAMF0ObjectType.String)
-                                                    {
-                                                        AMF0Objects.AMF0String AMFString = null;
-
-                                                        AMFString = (AMF0Objects.AMF0String)BaseBody.AMF0List[0];
-                                                        if (AMFString.Value == "play")
+                                                        if (ConnectBody.CommandName.Value.ToUpper() == "connect".ToUpper())
                                                         {
-                                                            AMFCommand.Play PlayBody = new AMFCommand.Play((AMFCommand.AMFCommandBody)ClientR.Body);
+                                                            AMF0Objects.AMF0String StreamName = null;
+                                                            AMF0Objects.AMF0Number objectEncoding = null;
 
-                                                            iClientTransactionID = Convert.ToInt32(PlayBody.TransactionID.Value);
-                                                            iConnectionState = enumConnectionState.Play;
+                                                            iConnectionState = enumConnectionState.Connect;
+                                                            iClientTransactionID = Convert.ToInt32(ConnectBody.TransactionID.Value);
+                                                            StreamName = (AMF0Objects.AMF0String)ConnectBody.CommandObject.GetValue("app");
+                                                            objectEncoding = (AMF0Objects.AMF0Number)ConnectBody.CommandObject.GetValue("objectEncoding");
 
-                                                            if (PlayBody.StreamName != null)
-                                                                RTMPCommandPlay?.Invoke(this, PlayBody, PlayBody.StreamName.Value);
+                                                            if (objectEncoding != null)
+                                                            {
+                                                                iObjectEncodingNumber = Convert.ToInt32(objectEncoding.Value);
+                                                            }
+
+                                                            if (StreamName != null)
+                                                            {
+                                                                RTMPCommandConnect?.Invoke(this, ConnectBody, StreamName.Value);
+                                                            }
                                                             else
-                                                                RTMPCommandPlay?.Invoke(this, PlayBody, string.Empty);
+                                                            {
+                                                                RTMPCommandConnect?.Invoke(this, ConnectBody, string.Empty);
+                                                            }
+                                                            // Else
+                                                            // RaiseEvent HandshakeException(Me)
+                                                            // Close()
+
+                                                            // Exit Do
                                                         }
-                                                    }
+
+                                                        break;
+                                                    case enumConnectionState.Connect_Result:
+                                                        // 預期 createStream
+                                                        AMFCommand.CreateStream CreateStreamBody = new AMFCommand.CreateStream((AMFCommand.AMFCommandBody)ClientR.Body);
+
+                                                        if (CreateStreamBody.CommandName.Value.ToUpper() == "createStream".ToUpper())
+                                                        {
+                                                            iClientTransactionID = Convert.ToInt32(CreateStreamBody.TransactionID.Value);
+                                                            iConnectionState = enumConnectionState.CreateStream;
+
+                                                            RTMPCommandCreateStream?.Invoke(this, CreateStreamBody);
+                                                        }
+
+                                                        break;
+                                                    case enumConnectionState.CreateStream_Result:
+                                                        // 預期 play
+                                                        AMFCommand.AMFCommandBody BaseBody = (AMFCommand.AMFCommandBody)ClientR.Body;
+
+                                                        if (BaseBody.AMF0List.Count > 0)
+                                                        {
+                                                            if (BaseBody.AMF0List[0].ObjectType == Common.enumAMF0ObjectType.String)
+                                                            {
+                                                                AMF0Objects.AMF0String AMFString = null;
+
+                                                                AMFString = (AMF0Objects.AMF0String)BaseBody.AMF0List[0];
+                                                                if (AMFString.Value == "play")
+                                                                {
+                                                                    AMFCommand.Play PlayBody = new AMFCommand.Play((AMFCommand.AMFCommandBody)ClientR.Body);
+
+                                                                    iClientTransactionID = Convert.ToInt32(PlayBody.TransactionID.Value);
+                                                                    iConnectionState = enumConnectionState.Play;
+
+                                                                    if (PlayBody.StreamName != null)
+                                                                        RTMPCommandPlay?.Invoke(this, PlayBody, PlayBody.StreamName.Value);
+                                                                    else
+                                                                        RTMPCommandPlay?.Invoke(this, PlayBody, string.Empty);
+                                                                }
+                                                            }
+                                                        }
+
+                                                        break;
+                                                    case enumConnectionState.StreamBegin:
+                                                        break;
                                                 }
 
                                                 break;
-                                            case enumConnectionState.StreamBegin:
+                                            case RTMPHead.enumTypeID.AMF0Data:
+                                                break;
+                                            default:
+                                                RTMPMessage?.Invoke(this, ClientR.Head, ClientR.Body);
+
                                                 break;
                                         }
-
-                                        break;
-                                    case RTMPHead.enumTypeID.AMF0Data:
-                                        break;
-                                    default:
-                                        RTMPMessage?.Invoke(this, ClientR.Head, ClientR.Body);
-
-                                        break;
                                 }
 
-                                iRecvBuffer.RemoveRange(0, TotalCount);
+                                iRecvBuffer.RemoveRange(0, OutBytes);
                             }
                             else
                             {

@@ -2,6 +2,8 @@
 {
     public partial class RTMPHead
     {
+        private int iOffset = 0;
+
         private int iChunkId;
         private enumFmtType iFmtType;
         private int iChunkStreamID;
@@ -21,6 +23,7 @@
         public enum enumTypeID
         {
             // AMF0Command = 0
+            Unknow = 0,
             SetChunkSize = 1,
             AboutMsg = 2,
             Ack = 3,
@@ -264,33 +267,37 @@
         {
         }
 
-        public RTMPHead(byte[] ArrayValue)
+        public RTMPHead(byte[] ArrayValue, int Offset)
         {
-            int Offset;
+            int MsgHeaderOffset;
+            int csid;
 
             iFmtType = (enumFmtType)((ArrayValue[0] & 0xC0) >> 6);
-            switch (ArrayValue[0] & 0x3F)
+            csid = ArrayValue[0] & 0x3F;
+            switch (csid)
             {
                 case 0:
                     // Chunk type 2 (16bit)
                     iChunkId = ArrayValue[1] + 64;
-                    Offset = 2;
+                    MsgHeaderOffset = 2;
                     break;
                 case 1:
                     // Chunk type 3 (24bit)
                     iChunkId = ArrayValue[1] * 256 + ArrayValue[2] + 64;
-                    Offset = 3;
+                    MsgHeaderOffset = 3;
                     break;
                 default:
                     // Chunk type 1 (8bit)
                     iChunkId = ArrayValue[0] & 0x3F;
-                    Offset = 1;
+                    MsgHeaderOffset = 1;
                     break;
             }
 
             if ((iFmtType == enumFmtType.Type0) || (iFmtType == enumFmtType.Type1) || (iFmtType == enumFmtType.Type2))
             {
-                if (ArrayValue[Offset + 0] == 0xFF & ArrayValue[Offset + 1] == 0xFF & ArrayValue[Offset + 2] == 0xFF)
+                if (ArrayValue[Offset + MsgHeaderOffset + 0] == 0xFF & 
+                    ArrayValue[Offset + MsgHeaderOffset + 1] == 0xFF & 
+                    ArrayValue[Offset + MsgHeaderOffset + 2] == 0xFF)
                 {
                     int HS = 0;
 
@@ -314,25 +321,35 @@
                     }
 
                     //iTimeStamp = (ArrayValue(HS + 0) * (256 ^ 3)) + (ArrayValue(HS + 1) * (256 ^ 2)) + ArrayValue(HS + 2) * 256 + ArrayValue(HS + 3)
-                    iTimeStamp = (uint)System.Math.Round(ArrayValue[HS + 0] * System.Math.Pow(256d, 3d) + ArrayValue[HS + 1] * System.Math.Pow(256d, 2d) + ArrayValue[HS + 2] * 256 + ArrayValue[HS + 3]);
+                    iTimeStamp = (uint)System.Math.Round(ArrayValue[Offset + HS + 0] * System.Math.Pow(256d, 3d) + 
+                                                         ArrayValue[Offset + HS + 1] * System.Math.Pow(256d, 2d) + 
+                                                         ArrayValue[Offset + HS + 2] * 256 + 
+                                                         ArrayValue[Offset + HS + 3]);
                 }
                 else
                 {
                     //iTimeStamp = (ArrayValue(Offset + 0) * (256 ^ 2)) + ArrayValue(Offset + 1) * 256 + ArrayValue(Offset + 2)
-                    iTimeStamp = (uint)System.Math.Round(ArrayValue[Offset + 0] * System.Math.Pow(256d, 2d) + ArrayValue[Offset + 1] * 256 + ArrayValue[Offset + 2]);
+                    iTimeStamp = (uint)System.Math.Round(ArrayValue[Offset + MsgHeaderOffset + 0] * System.Math.Pow(256d, 2d) + 
+                                                         ArrayValue[Offset + MsgHeaderOffset + 1] * 256 + 
+                                                         ArrayValue[Offset + MsgHeaderOffset + 2]);
                 }
             }
 
             if ((iFmtType == enumFmtType.Type0) || (iFmtType == enumFmtType.Type1))
             {
                 //iBodySize = (ArrayValue(Offset + 3) * (256 ^ 2)) + ArrayValue(Offset + 4) * 256 + ArrayValue(Offset + 5)
-                iBodySize = (int)System.Math.Round(ArrayValue[Offset + 3] * System.Math.Pow(256d, 2d) + ArrayValue[Offset + 4] * 256 + ArrayValue[Offset + 5]);
-                iTypeID = (enumTypeID)ArrayValue[Offset + 6];
+                iBodySize = (int)System.Math.Round(ArrayValue[Offset + MsgHeaderOffset + 3] * System.Math.Pow(256d, 2d) + 
+                                                   ArrayValue[Offset + MsgHeaderOffset + 4] * 256 + 
+                                                   ArrayValue[Offset + MsgHeaderOffset + 5]);
+                iTypeID = (enumTypeID)ArrayValue[Offset + MsgHeaderOffset + 6];
             }
 
             if (iFmtType == enumFmtType.Type0)
             {
-                iStreamID = System.BitConverter.ToInt32(ArrayValue, Offset + 7);
+                iStreamID = (int)System.Math.Round(ArrayValue[Offset + MsgHeaderOffset + 7] * System.Math.Pow(256d, 3d) +
+                                                   ArrayValue[Offset + MsgHeaderOffset + 8] * System.Math.Pow(256d, 2d) +
+                                                   ArrayValue[Offset + MsgHeaderOffset + 9] * 256 +
+                                                   ArrayValue[Offset + MsgHeaderOffset + 10]);
                 // iStreamID = (ArrayValue(Offset + 7) * (256 ^ 3)) + (ArrayValue(Offset + 8) * (256 ^ 2)) + ArrayValue(Offset + 9) * 256 + ArrayValue(Offset + 10)
             }
         }

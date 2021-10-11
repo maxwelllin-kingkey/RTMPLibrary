@@ -584,10 +584,11 @@ namespace RTMPLibrary
                             if (TotalCount != -1)
                             {
                                 RTMP ServerR = null;
+                                int OutBytes = 0;
 
                                 //try
                                 {
-                                    ServerR = iRTMP.ParsingFromArray(iBuffer.InternalBuffer, iBuffer.Count, iChunkSize);
+                                    ServerR = iRTMP.ParsingFromArray(iBuffer.InternalBuffer, iBuffer.Count, iChunkSize, out OutBytes);
                                 }
                                 //catch (Exception ex)
                                 //{
@@ -599,359 +600,359 @@ namespace RTMPLibrary
 
                                 if (ServerR != null)
                                 {
-                                    iFmtTimestamp += (int)ServerR.Head.Timestamp;
+                                        iFmtTimestamp += (int)ServerR.Head.Timestamp;
 
-                                    if (ServerR.Body == null)
-                                    {
-                                        // 透過 chunk stream id 辨識
-                                        if ((ServerR.Head.ChunkStreamID == iUCMStreamID) && (ServerR.IsFmtType2 == false))
-                                            TotalCount = ServerR.Head.HeaderSize + 6;
-                                    }
-                                    else
-                                    {
-                                        // Console.WriteLine(ServerR.Head.TypeID.ToString & "  FmtType:" & ServerR.Head.FmtType & "(" & ServerR.IsFmtType2.ToString & "), ChunkStreamID:" & ServerR.Head.ChunkStreamID & ", StreamID:" & ServerR.Head.StreamID & ", Timestamp:" & ServerR.Head.Timestamp & ", Bodysize:" & ServerR.Head.BodySize)
-
-                                        switch (ServerR.Head.TypeID)
+                                        if (ServerR.Body == null)
                                         {
-                                            case RTMPHead.enumTypeID.SetChunkSize:
-                                                {
-                                                    RTMPBodyChunkSize Body = (RTMPBodyChunkSize)ServerR.Body;
+                                            // 透過 chunk stream id 辨識
+                                            if ((ServerR.Head.ChunkStreamID == iUCMStreamID) && (ServerR.IsFmtType2 == false))
+                                                TotalCount = ServerR.Head.HeaderSize + 6;
+                                        }
+                                        else
+                                        {
+                                            // Console.WriteLine(ServerR.Head.TypeID.ToString & "  FmtType:" & ServerR.Head.FmtType & "(" & ServerR.IsFmtType2.ToString & "), ChunkStreamID:" & ServerR.Head.ChunkStreamID & ", StreamID:" & ServerR.Head.StreamID & ", Timestamp:" & ServerR.Head.Timestamp & ", Bodysize:" & ServerR.Head.BodySize)
 
-                                                    iChunkSize = (int)Body.ChunkSize;
-
-                                                    break;
-                                                }
-                                            case RTMPHead.enumTypeID.SetWindowSize:
-                                                {
-                                                    RTMPBodyWindowSize Body = (RTMPBodyWindowSize)ServerR.Body;
-
-                                                    iServerWindowAckSize = (int)Body.WindowSize;
-
-                                                    break;
-                                                }
-                                            case RTMPHead.enumTypeID.SetPeerBandwidth:
-                                                {
-                                                    RTMPBodyPeerBandwidth Body = (RTMPBodyPeerBandwidth)ServerR.Body;
-
-                                                    iServerBandwidth = (int)Body.WindowSize;
-                                                    iServerBandwidthType = Body.LimitType;
-
-                                                    break;
-                                                }
-                                            case RTMPHead.enumTypeID.Aggregate:
-                                                {
-                                                    // 混合封包
-                                                    RTMPBodyAggregate AggreMsg;
-                                                    AggreMsg = (RTMPBodyAggregate)ServerR.Body;
-
-                                                    // Console.WriteLine("Aggregate package:" & AggreMsg.GetList.Count)
-                                                    foreach (RTMPBodyAggregate.AggregateMessage EachMsg in AggreMsg.GetList())
+                                            switch (ServerR.Head.TypeID)
+                                            {
+                                                case RTMPHead.enumTypeID.SetChunkSize:
                                                     {
-                                                        // Console.WriteLine("TypeID [" & EachMsg.TypeID.ToString & "] Aggregate Timestamp:" & EachMsg.Timestamp & ", LastVideoTimestamp:" & iLastVideoTimestamp)
+                                                        RTMPBodyChunkSize Body = (RTMPBodyChunkSize)ServerR.Body;
 
-                                                        switch (EachMsg.TypeID)
+                                                        iChunkSize = (int)Body.ChunkSize;
+
+                                                        break;
+                                                    }
+                                                case RTMPHead.enumTypeID.SetWindowSize:
+                                                    {
+                                                        RTMPBodyWindowSize Body = (RTMPBodyWindowSize)ServerR.Body;
+
+                                                        iServerWindowAckSize = (int)Body.WindowSize;
+
+                                                        break;
+                                                    }
+                                                case RTMPHead.enumTypeID.SetPeerBandwidth:
+                                                    {
+                                                        RTMPBodyPeerBandwidth Body = (RTMPBodyPeerBandwidth)ServerR.Body;
+
+                                                        iServerBandwidth = (int)Body.WindowSize;
+                                                        iServerBandwidthType = Body.LimitType;
+
+                                                        break;
+                                                    }
+                                                case RTMPHead.enumTypeID.Aggregate:
+                                                    {
+                                                        // 混合封包
+                                                        RTMPBodyAggregate AggreMsg;
+                                                        AggreMsg = (RTMPBodyAggregate)ServerR.Body;
+
+                                                        // Console.WriteLine("Aggregate package:" & AggreMsg.GetList.Count)
+                                                        foreach (RTMPBodyAggregate.AggregateMessage EachMsg in AggreMsg.GetList())
                                                         {
-                                                            case RTMPHead.enumTypeID.VideoData:
-                                                                {
-                                                                    RTMPBodyVideoData VideoBody = null;
+                                                            // Console.WriteLine("TypeID [" & EachMsg.TypeID.ToString & "] Aggregate Timestamp:" & EachMsg.Timestamp & ", LastVideoTimestamp:" & iLastVideoTimestamp)
 
-                                                                    try { VideoBody = new RTMPBodyVideoData(EachMsg.Body, EachMsg.BodyOffset, EachMsg.BodyLength); }
-                                                                    catch (Exception ex) { Console.WriteLine("Aggregate invalid video:" + ex.Message); }
-
-                                                                    // Composition Time 等同 RTSP Timestamp (上一個封包的總合經過時間)
-                                                                    // Time Delta 是每一個封包的時間差, 一個封包內可能包含許多 Video Data
-
-                                                                    if (VideoBody != null)
-                                                                    {
-                                                                        VideoData?.Invoke(this, (uint)EachMsg.Timestamp - ServerR.Head.Timestamp, VideoBody);
-                                                                    }
-
-                                                                    break;
-                                                                }
-                                                            case RTMPHead.enumTypeID.AudioData:
-                                                                {
-                                                                    RTMPBodyAudioData AudioBody = null;
-
-                                                                    try { AudioBody = new RTMPBodyAudioData(EachMsg.Body, EachMsg.BodyOffset, EachMsg.BodyLength); }
-                                                                    catch (Exception ex) { Console.WriteLine("Aggregate invalid audio:" + ex.Message); }
-
-                                                                    if (AudioBody != null)
-                                                                    {
-                                                                        AudioData?.Invoke(this, (uint)EachMsg.Timestamp - ServerR.Head.Timestamp, AudioBody);
-                                                                    }
-
-                                                                    break;
-                                                                }
-                                                            default:
-                                                                {
-                                                                    if (Enum.IsDefined(typeof(RTMPHead.enumTypeID), EachMsg.TypeID) == false)
-                                                                    {
-                                                                        Console.WriteLine("Aggregate invalid type id:" + EachMsg.TypeID + ", BodyLength:" + EachMsg.BodyLength);
-                                                                    }
-
-                                                                    break;
-                                                                }
-                                                        }
-                                                    }
-
-                                                    break;
-                                                }
-                                            case RTMPHead.enumTypeID.VideoData:
-                                                {
-                                                    RTMPBodyVideoData VideoBody = null;
-
-                                                    try { VideoBody = (RTMPBodyVideoData)ServerR.Body; }
-                                                    catch (Exception ex) { Console.WriteLine("Video packet invalid"); }
-
-                                                    if (VideoBody != null)
-                                                    {
-                                                        // Console.WriteLine("VideoData TimeDelta:" & TimeDelta & ", CompositionTime:" & VideoBody.CompositionTime)
-                                                        // RaiseEvent VideoData(Me, TimeDelta, ServerR.Body)
-                                                        VideoData?.Invoke(this, ServerR.Head.Timestamp, VideoBody);
-                                                        // RaiseEvent VideoData(Me, 0, ServerR.Body)
-                                                    }
-
-                                                    break;
-                                                }
-                                            case RTMPHead.enumTypeID.AudioData:
-                                                {
-                                                    RTMPBodyAudioData AudioBody = null;
-
-                                                    try { AudioBody = (RTMPBodyAudioData)ServerR.Body; }
-                                                    catch (Exception ex) { Console.WriteLine("Audio packet invalid"); }
-
-                                                    if (AudioBody != null)
-                                                    {
-                                                        AudioData?.Invoke(this, ServerR.Head.Timestamp, AudioBody);
-                                                    }
-
-                                                    break;
-                                                }
-                                            case RTMPHead.enumTypeID.UserControlMsg:
-                                                UCM.UCMBase UCMBody = (UCM.UCMBase)ServerR.Body;
-
-                                                if (UCMBody != null)
-                                                {
-                                                    if (iUCMStreamID == -1)
-                                                        iUCMStreamID = ServerR.Head.ChunkStreamID;
-
-                                                    switch (UCMBody.EventType)
-                                                    {
-                                                        case UCM.UCMBase.enumEventType.StreamBegin:
-                                                            if (iConnectState == enumRTMPConnectState.GetPlayResult)
-                                                                iConnectState = enumRTMPConnectState.BeginStream;
-                                                            else
-                                                                iBeginStreamReceived = true;
-
-                                                            break;
-                                                        case UCM.UCMBase.enumEventType.PingRequest:
-                                                            UCM.PingRequest PReqBody = (UCM.PingRequest)UCMBody;
-                                                            UCM.PingResponse PRespBody = new UCM.PingResponse();
-
-                                                            PRespBody.Timestamp = PReqBody.Timestamp;
-                                                            SendRTMPBody(RTMPHead.enumFmtType.Type0, 2, 0, RTMPHead.enumTypeID.UserControlMsg, (int)ServerR.Head.StreamID, PRespBody);
-
-                                                            break;
-                                                    }
-                                                }
-
-                                                break;
-                                            case RTMPHead.enumTypeID.AMF0Data:
-                                                switch (iConnectState)
-                                                {
-                                                    case enumRTMPConnectState.BeginStream:
-                                                    case enumRTMPConnectState.GetPlayResult:
-                                                        // 可能會有 onMetaData
-                                                        AMFCommand.AMFCommandBody AMFBody = (AMFCommand.AMFCommandBody)ServerR.Body;
-                                                        if (AMFBody.AMF0List.Count > 0)
-                                                        {
-                                                            if (AMFBody.AMF0List[0].ObjectType == Common.enumAMF0ObjectType.String)
+                                                            switch (EachMsg.TypeID)
                                                             {
-                                                                AMF0Objects.AMF0String AMFCode = (AMF0Objects.AMF0String)AMFBody.AMF0List[0];
-
-                                                                if (AMFCode.Value.ToUpper() == "onStatus".ToUpper())
-                                                                {
-                                                                    AMFData.onStatusResult AMFStatus = new AMFData.onStatusResult((AMFCommand.AMFCommandBody)ServerR.Body);
-                                                                    AMF0Objects.AMF0String AMFStringCode = null;
-
-                                                                    AMFStringCode = (AMF0Objects.AMF0String)AMFStatus.Information.GetValue("code");
-                                                                    if (AMFStringCode != null)
+                                                                case RTMPHead.enumTypeID.VideoData:
                                                                     {
-                                                                        OnDataStatus?.Invoke(this, AMFStringCode.Value, AMFStatus);
-                                                                    }
-                                                                }
-                                                                else if (AMFCode.Value.ToUpper() == "onMetaData".ToUpper())
-                                                                {
-                                                                    AMFCommand.onMetaData MetaBody = new AMFCommand.onMetaData((AMFCommand.AMFCommandBody)ServerR.Body);
+                                                                        RTMPBodyVideoData VideoBody = null;
 
-                                                                    OnMetaData?.Invoke(this, MetaBody);
-                                                                }
+                                                                        try { VideoBody = new RTMPBodyVideoData(EachMsg.Body, EachMsg.BodyOffset, EachMsg.BodyLength); }
+                                                                        catch (Exception ex) { Console.WriteLine("Aggregate invalid video:" + ex.Message); }
+
+                                                                        // Composition Time 等同 RTSP Timestamp (上一個封包的總合經過時間)
+                                                                        // Time Delta 是每一個封包的時間差, 一個封包內可能包含許多 Video Data
+
+                                                                        if (VideoBody != null)
+                                                                        {
+                                                                            VideoData?.Invoke(this, (uint)EachMsg.Timestamp - ServerR.Head.Timestamp, VideoBody);
+                                                                        }
+
+                                                                        break;
+                                                                    }
+                                                                case RTMPHead.enumTypeID.AudioData:
+                                                                    {
+                                                                        RTMPBodyAudioData AudioBody = null;
+
+                                                                        try { AudioBody = new RTMPBodyAudioData(EachMsg.Body, EachMsg.BodyOffset, EachMsg.BodyLength); }
+                                                                        catch (Exception ex) { Console.WriteLine("Aggregate invalid audio:" + ex.Message); }
+
+                                                                        if (AudioBody != null)
+                                                                        {
+                                                                            AudioData?.Invoke(this, (uint)EachMsg.Timestamp - ServerR.Head.Timestamp, AudioBody);
+                                                                        }
+
+                                                                        break;
+                                                                    }
+                                                                default:
+                                                                    {
+                                                                        if (Enum.IsDefined(typeof(RTMPHead.enumTypeID), EachMsg.TypeID) == false)
+                                                                        {
+                                                                            Console.WriteLine("Aggregate invalid type id:" + EachMsg.TypeID + ", BodyLength:" + EachMsg.BodyLength);
+                                                                        }
+
+                                                                        break;
+                                                                    }
+                                                            }
+                                                        }
+
+                                                        break;
+                                                    }
+                                                case RTMPHead.enumTypeID.VideoData:
+                                                    {
+                                                        RTMPBodyVideoData VideoBody = null;
+
+                                                        try { VideoBody = (RTMPBodyVideoData)ServerR.Body; }
+                                                        catch (Exception ex) { Console.WriteLine("Video packet invalid"); }
+
+                                                        if (VideoBody != null)
+                                                        {
+                                                            // Console.WriteLine("VideoData TimeDelta:" & TimeDelta & ", CompositionTime:" & VideoBody.CompositionTime)
+                                                            // RaiseEvent VideoData(Me, TimeDelta, ServerR.Body)
+                                                            VideoData?.Invoke(this, ServerR.Head.Timestamp, VideoBody);
+                                                            // RaiseEvent VideoData(Me, 0, ServerR.Body)
+                                                        }
+
+                                                        break;
+                                                    }
+                                                case RTMPHead.enumTypeID.AudioData:
+                                                    {
+                                                        RTMPBodyAudioData AudioBody = null;
+
+                                                        try { AudioBody = (RTMPBodyAudioData)ServerR.Body; }
+                                                        catch (Exception ex) { Console.WriteLine("Audio packet invalid"); }
+
+                                                        if (AudioBody != null)
+                                                        {
+                                                            AudioData?.Invoke(this, ServerR.Head.Timestamp, AudioBody);
+                                                        }
+
+                                                        break;
+                                                    }
+                                                case RTMPHead.enumTypeID.UserControlMsg:
+                                                    UCM.UCMBase UCMBody = (UCM.UCMBase)ServerR.Body;
+
+                                                    if (UCMBody != null)
+                                                    {
+                                                        if (iUCMStreamID == -1)
+                                                            iUCMStreamID = ServerR.Head.ChunkStreamID;
+
+                                                        switch (UCMBody.EventType)
+                                                        {
+                                                            case UCM.UCMBase.enumEventType.StreamBegin:
+                                                                if (iConnectState == enumRTMPConnectState.GetPlayResult)
+                                                                    iConnectState = enumRTMPConnectState.BeginStream;
                                                                 else
+                                                                    iBeginStreamReceived = true;
+
+                                                                break;
+                                                            case UCM.UCMBase.enumEventType.PingRequest:
+                                                                UCM.PingRequest PReqBody = (UCM.PingRequest)UCMBody;
+                                                                UCM.PingResponse PRespBody = new UCM.PingResponse();
+
+                                                                PRespBody.Timestamp = PReqBody.Timestamp;
+                                                                SendRTMPBody(RTMPHead.enumFmtType.Type0, 2, 0, RTMPHead.enumTypeID.UserControlMsg, (int)ServerR.Head.StreamID, PRespBody);
+
+                                                                break;
+                                                        }
+                                                    }
+
+                                                    break;
+                                                case RTMPHead.enumTypeID.AMF0Data:
+                                                    switch (iConnectState)
+                                                    {
+                                                        case enumRTMPConnectState.BeginStream:
+                                                        case enumRTMPConnectState.GetPlayResult:
+                                                            // 可能會有 onMetaData
+                                                            AMFCommand.AMFCommandBody AMFBody = (AMFCommand.AMFCommandBody)ServerR.Body;
+                                                            if (AMFBody.AMF0List.Count > 0)
+                                                            {
+                                                                if (AMFBody.AMF0List[0].ObjectType == Common.enumAMF0ObjectType.String)
                                                                 {
-                                                                    // other event or message
-                                                                }
-                                                            }
-                                                            else
-                                                            {
-                                                                // other variable
-                                                            }
-                                                        }
+                                                                    AMF0Objects.AMF0String AMFCode = (AMF0Objects.AMF0String)AMFBody.AMF0List[0];
 
-                                                        break;
-                                                }
-
-                                                break;
-                                            case RTMPHead.enumTypeID.AMF0Command:
-                                            case RTMPHead.enumTypeID.AMF3Command:
-                                                switch (iConnectState)
-                                                {
-                                                    case enumRTMPConnectState.Connect:
-                                                        AMFCommand.ConnectResult ConnectResult = new AMFCommand.ConnectResult((AMFCommand.AMFCommandBody)ServerR.Body);
-                                                        AMF0Objects.AMF0String AMFString = null;
-
-                                                        AMFString = (AMF0Objects.AMF0String)ConnectResult.Information.GetValue("code");
-                                                        if (AMFString != null)
-                                                        {
-                                                            if (AMFString.Value.ToUpper().Contains("Success".ToUpper()))
-                                                            {
-                                                                iConnectState = enumRTMPConnectState.GetConnectResult;
-
-                                                                HandshakeCompleted?.Invoke(this);
-                                                            }
-                                                            else
-                                                            {
-                                                                HandshakeFail?.Invoke(this);
-                                                            }
-                                                        }
-                                                        else
-                                                        {
-                                                            HandshakeFail?.Invoke(this);
-                                                        }
-
-                                                        break;
-
-                                                    case enumRTMPConnectState.CreateStream:
-                                                        AMFCommand.CreateStreamResult CSResult = new AMFCommand.CreateStreamResult((AMFCommand.AMFCommandBody)ServerR.Body);
-                                                        if (CSResult.CommandName != null)
-                                                        {
-                                                            if (CSResult.CommandName.Value == "_result")
-                                                            {
-                                                                iPlayStreamID = Convert.ToInt32(CSResult.StreamID.Value);
-                                                                iConnectState = enumRTMPConnectState.GetCreateStreamResult;
-                                                            }
-                                                            else
-                                                            {
-                                                                HandshakeFail?.Invoke(this);
-                                                            }
-                                                        }
-                                                        else
-                                                        {
-                                                            HandshakeFail?.Invoke(this);
-                                                        }
-
-                                                        break;
-
-                                                    case enumRTMPConnectState.Play:
-                                                        AMFCommand.onStatusResult PlayResult = new AMFCommand.onStatusResult((AMFCommand.AMFCommandBody)ServerR.Body);
-
-                                                        if (PlayResult.CommandName.Value == "onStatus")
-                                                        {
-                                                            if (PlayResult.code != null)
-                                                            {
-                                                                OnCommandStatus?.Invoke(this, PlayResult.code, PlayResult);
-
-                                                                if (iIsPublishMode)
-                                                                {
-                                                                    // publish 
-                                                                    if (PlayResult.code.ToUpper().Contains("Publish.Start".ToUpper()))
+                                                                    if (AMFCode.Value.ToUpper() == "onStatus".ToUpper())
                                                                     {
-                                                                        iConnectState = enumRTMPConnectState.Publish;
+                                                                        AMFData.onStatusResult AMFStatus = new AMFData.onStatusResult((AMFCommand.AMFCommandBody)ServerR.Body);
+                                                                        AMF0Objects.AMF0String AMFStringCode = null;
+
+                                                                        AMFStringCode = (AMF0Objects.AMF0String)AMFStatus.Information.GetValue("code");
+                                                                        if (AMFStringCode != null)
+                                                                        {
+                                                                            OnDataStatus?.Invoke(this, AMFStringCode.Value, AMFStatus);
+                                                                        }
+                                                                    }
+                                                                    else if (AMFCode.Value.ToUpper() == "onMetaData".ToUpper())
+                                                                    {
+                                                                        AMFCommand.onMetaData MetaBody = new AMFCommand.onMetaData((AMFCommand.AMFCommandBody)ServerR.Body);
+
+                                                                        OnMetaData?.Invoke(this, MetaBody);
                                                                     }
                                                                     else
                                                                     {
-                                                                        // other event
+                                                                        // other event or message
                                                                     }
                                                                 }
                                                                 else
                                                                 {
-                                                                    // play
-                                                                    if (PlayResult.code.ToUpper().Contains("Play.Start".ToUpper()))
+                                                                    // other variable
+                                                                }
+                                                            }
+
+                                                            break;
+                                                    }
+
+                                                    break;
+                                                case RTMPHead.enumTypeID.AMF0Command:
+                                                case RTMPHead.enumTypeID.AMF3Command:
+                                                    switch (iConnectState)
+                                                    {
+                                                        case enumRTMPConnectState.Connect:
+                                                            AMFCommand.ConnectResult ConnectResult = new AMFCommand.ConnectResult((AMFCommand.AMFCommandBody)ServerR.Body);
+                                                            AMF0Objects.AMF0String AMFString = null;
+
+                                                            AMFString = (AMF0Objects.AMF0String)ConnectResult.Information.GetValue("code");
+                                                            if (AMFString != null)
+                                                            {
+                                                                if (AMFString.Value.ToUpper().Contains("Success".ToUpper()))
+                                                                {
+                                                                    iConnectState = enumRTMPConnectState.GetConnectResult;
+
+                                                                    HandshakeCompleted?.Invoke(this);
+                                                                }
+                                                                else
+                                                                {
+                                                                    HandshakeFail?.Invoke(this);
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                HandshakeFail?.Invoke(this);
+                                                            }
+
+                                                            break;
+
+                                                        case enumRTMPConnectState.CreateStream:
+                                                            AMFCommand.CreateStreamResult CSResult = new AMFCommand.CreateStreamResult((AMFCommand.AMFCommandBody)ServerR.Body);
+                                                            if (CSResult.CommandName != null)
+                                                            {
+                                                                if (CSResult.CommandName.Value == "_result")
+                                                                {
+                                                                    iPlayStreamID = Convert.ToInt32(CSResult.StreamID.Value);
+                                                                    iConnectState = enumRTMPConnectState.GetCreateStreamResult;
+                                                                }
+                                                                else
+                                                                {
+                                                                    HandshakeFail?.Invoke(this);
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                HandshakeFail?.Invoke(this);
+                                                            }
+
+                                                            break;
+
+                                                        case enumRTMPConnectState.Play:
+                                                            AMFCommand.onStatusResult PlayResult = new AMFCommand.onStatusResult((AMFCommand.AMFCommandBody)ServerR.Body);
+
+                                                            if (PlayResult.CommandName.Value == "onStatus")
+                                                            {
+                                                                if (PlayResult.code != null)
+                                                                {
+                                                                    OnCommandStatus?.Invoke(this, PlayResult.code, PlayResult);
+
+                                                                    if (iIsPublishMode)
                                                                     {
-                                                                        if (iBeginStreamReceived == false)
+                                                                        // publish 
+                                                                        if (PlayResult.code.ToUpper().Contains("Publish.Start".ToUpper()))
                                                                         {
-                                                                            iConnectState = enumRTMPConnectState.GetPlayResult;
+                                                                            iConnectState = enumRTMPConnectState.Publish;
                                                                         }
                                                                         else
                                                                         {
-                                                                            iConnectState = enumRTMPConnectState.BeginStream;
+                                                                            // other event
                                                                         }
                                                                     }
                                                                     else
                                                                     {
-                                                                        // other event
+                                                                        // play
+                                                                        if (PlayResult.code.ToUpper().Contains("Play.Start".ToUpper()))
+                                                                        {
+                                                                            if (iBeginStreamReceived == false)
+                                                                            {
+                                                                                iConnectState = enumRTMPConnectState.GetPlayResult;
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                iConnectState = enumRTMPConnectState.BeginStream;
+                                                                            }
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            // other event
+                                                                        }
                                                                     }
+                                                                }
+                                                                else
+                                                                {
+                                                                    HandshakeFail?.Invoke(this);
                                                                 }
                                                             }
                                                             else
                                                             {
                                                                 HandshakeFail?.Invoke(this);
                                                             }
-                                                        }
-                                                        else
-                                                        {
-                                                            HandshakeFail?.Invoke(this);
-                                                        }
 
-                                                        break;
-                                                    default:
-                                                        AMFCommand.AMFCommandBody AMFBody = (AMFCommand.AMFCommandBody)ServerR.Body;
+                                                            break;
+                                                        default:
+                                                            AMFCommand.AMFCommandBody AMFBody = (AMFCommand.AMFCommandBody)ServerR.Body;
 
-                                                        if (AMFBody.AMF0List.Count > 0)
-                                                        {
-                                                            if (AMFBody.AMF0List[0].ObjectType == Common.enumAMF0ObjectType.String)
+                                                            if (AMFBody.AMF0List.Count > 0)
                                                             {
-                                                                AMF0Objects.AMF0String AMFCode = (AMF0Objects.AMF0String)AMFBody.AMF0List[0];
-
-                                                                if (AMFCode.Value.ToUpper() == "onStatus".ToUpper())
+                                                                if (AMFBody.AMF0List[0].ObjectType == Common.enumAMF0ObjectType.String)
                                                                 {
-                                                                    AMFCommand.onStatusResult AMFStatus = new AMFCommand.onStatusResult((AMFCommand.AMFCommandBody)ServerR.Body);
-                                                                    AMF0Objects.AMF0String AMFStringCode = null;
+                                                                    AMF0Objects.AMF0String AMFCode = (AMF0Objects.AMF0String)AMFBody.AMF0List[0];
 
-                                                                    AMFStringCode = (AMF0Objects.AMF0String)AMFStatus.Information.GetValue("code");
-                                                                    if (AMFStringCode != null)
+                                                                    if (AMFCode.Value.ToUpper() == "onStatus".ToUpper())
                                                                     {
-                                                                        OnCommandStatus?.Invoke(this, AMFStringCode.Value, AMFStatus);
-                                                                    }
-                                                                }
-                                                                else if (AMFCode.Value.ToUpper() == "onMetaData".ToUpper())
-                                                                {
-                                                                    AMFCommand.onMetaData MetaBody = new AMFCommand.onMetaData((AMFCommand.AMFCommandBody)ServerR.Body);
+                                                                        AMFCommand.onStatusResult AMFStatus = new AMFCommand.onStatusResult((AMFCommand.AMFCommandBody)ServerR.Body);
+                                                                        AMF0Objects.AMF0String AMFStringCode = null;
 
-                                                                    OnMetaData?.Invoke(this, MetaBody);
+                                                                        AMFStringCode = (AMF0Objects.AMF0String)AMFStatus.Information.GetValue("code");
+                                                                        if (AMFStringCode != null)
+                                                                        {
+                                                                            OnCommandStatus?.Invoke(this, AMFStringCode.Value, AMFStatus);
+                                                                        }
+                                                                    }
+                                                                    else if (AMFCode.Value.ToUpper() == "onMetaData".ToUpper())
+                                                                    {
+                                                                        AMFCommand.onMetaData MetaBody = new AMFCommand.onMetaData((AMFCommand.AMFCommandBody)ServerR.Body);
+
+                                                                        OnMetaData?.Invoke(this, MetaBody);
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        // other event or message
+                                                                        Console.WriteLine("Unknow event:" + AMFCode.Value);
+                                                                    }
                                                                 }
                                                                 else
                                                                 {
-                                                                    // other event or message
-                                                                    Console.WriteLine("Unknow event:" + AMFCode.Value);
+                                                                    // other variable
+                                                                    throw new Exception("Unable to process ObjectType:" + AMFBody.AMF0List[0].ObjectType);
                                                                 }
                                                             }
-                                                            else
-                                                            {
-                                                                // other variable
-                                                                throw new Exception("Unable to process ObjectType:" + AMFBody.AMF0List[0].ObjectType);
-                                                            }
-                                                        }
 
-                                                        break;
-                                                }
+                                                            break;
+                                                    }
 
-                                                break;
-                                            default:
-                                                Console.WriteLine("Invalid ID:" + ServerR.Head.TypeID);
+                                                    break;
+                                                default:
+                                                    Console.WriteLine("Invalid ID:" + ServerR.Head.TypeID);
 
-                                                break;
+                                                    break;
+                                            }
                                         }
-                                    }
                                 }
                                 else
                                 {
@@ -961,7 +962,7 @@ namespace RTMPLibrary
                                 // iLastPacket = Array.CreateInstance(GetType(Byte), TotalCount)
                                 // iBuffer.CopyTo(0, iLastPacket, 0, iLastPacket.Length)
 
-                                iBuffer.RemoveRange(0, TotalCount);
+                                iBuffer.RemoveRange(0, OutBytes);
                             }
                             // Console.WriteLine("Remove count:" & TotalCount & ", FmtType:" & ServerR.Head.FmtType.ToString & ", IsType2:" & ServerR.IsFmtType2.ToString & ", TypeID:" & ServerR.Head.TypeID.ToString & " ChunkStreamID:" & ServerR.Head.ChunkStreamID)
                             else
