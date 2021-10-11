@@ -192,7 +192,7 @@ namespace RTMPLibrary
                 BodyArray = (byte[])System.Array.CreateInstance(typeof(byte), RTMPArray.Length - BodyOffset);
                 Array.Copy(RTMPArray, BodyOffset, BodyArray, 0, BodyArray.Length);
 
-                System.Console.WriteLine("ChunkStreamID:" + Head.ChunkStreamID + ", Type=" + Head.FmtType + ", BodySize=" + Head.BodySize);
+                //System.Console.WriteLine("ChunkStreamID:" + Head.ChunkStreamID + ", Type=" + Head.FmtType + ", BodySize=" + Head.BodySize);
                 if ((Head.BodySize > ChunkSize) && (ChunkSize != -1))
                 {
                     System.Collections.Generic.List<byte> BodyList = new System.Collections.Generic.List<byte>();
@@ -220,7 +220,7 @@ namespace RTMPLibrary
                             break;
 
                         ChunkHead = new RTMPHead(BodyTmpArrayList.InternalBuffer, 0);
-                        System.Console.WriteLine("ChunkStreamID-2:" + ChunkHead.ChunkStreamID + ", Type=" + ChunkHead.FmtType + ", BodySize=" + ChunkHead.BodySize);
+                        //System.Console.WriteLine("ChunkStreamID-2:" + ChunkHead.ChunkStreamID + ", Type=" + ChunkHead.FmtType + ", BodySize=" + ChunkHead.BodySize);
 
                         if (ChunkHead.ChunkStreamID == Head.ChunkStreamID)
                         {
