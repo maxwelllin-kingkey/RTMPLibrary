@@ -120,7 +120,7 @@ namespace RTMPLibrary.AMF0Objects
 
                 OffsetIndex += 4;
 
-                while(true)
+                while (true)
                 {
                     if (Value[OffsetIndex] == 0 & Value[OffsetIndex + 1] == 0 & Value[OffsetIndex + 2] == 9)
                     {
@@ -154,7 +154,8 @@ namespace RTMPLibrary.AMF0Objects
 
             RetValue.Add((byte)Common.enumAMF0ObjectType.EMCAArray);
 
-            RetValue.AddRange(new byte[] { 0, 0, 0, 0 });
+            for (int I = 0; I <= 3; I++)
+                RetValue.Add((byte)((long)Math.Round(Properties.Count % Math.Pow(256d, 3 - I + 1)) / (long)Math.Round(Math.Pow(256d, 3 - I))));
 
             if (Properties.Count > 0)
             {
