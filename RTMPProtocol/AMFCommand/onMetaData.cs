@@ -14,9 +14,10 @@
             get { return (AMF0Objects.AMF0String)iRTMPBodyAMFBase.AMF0List[0]; }
         }
 
-        public AMF0Objects.AMF0Object Information
+        public AMF0Objects.AMF0InheritsBase Information
         {
-            get { return (AMF0Objects.AMF0Object)iRTMPBodyAMFBase.AMF0List[1]; }
+
+            get { return iRTMPBodyAMFBase.AMF0List[1]; }
         }
 
         public onMetaData()

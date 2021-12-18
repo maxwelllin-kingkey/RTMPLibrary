@@ -317,8 +317,9 @@ namespace RTMPLibrary
             if ((iHandshakeState == enumHandshakeState.Completed) && (iConnectionState == enumConnectionState.StreamBegin))
             {
                 AMFCommand.onMetaData MetaBody = new AMFCommand.onMetaData();
+                RTMPLibrary.AMF0Objects.AMF0Object oInfo = (RTMPLibrary.AMF0Objects.AMF0Object)MetaBody.Information;
 
-                MetaBody.Information.SetValue("Server", "TopNVR RTMP Library");
+                oInfo.SetValue("Server", "TopNVR RTMP Library");
 
                 if (iEnableVideoTrack)
                 {
@@ -338,19 +339,19 @@ namespace RTMPLibrary
                             iVideoHeight = SPS.Height();
                         }
 
-                        MetaBody.Information.AddToProperties("width", new AMF0Objects.AMF0Number() { Value = iVideoWidth });
-                        MetaBody.Information.AddToProperties("height", new AMF0Objects.AMF0Number() { Value = iVideoHeight });
-                        MetaBody.Information.AddToProperties("displayWidth", new AMF0Objects.AMF0Number() { Value = iVideoWidth });
-                        MetaBody.Information.AddToProperties("displayHeight", new AMF0Objects.AMF0Number() { Value = iVideoHeight });
-                        MetaBody.Information.AddToProperties("duration", new AMF0Objects.AMF0Number() { Value = 0 });
+                        oInfo.AddToProperties("width", new AMF0Objects.AMF0Number() { Value = iVideoWidth });
+                        oInfo.AddToProperties("height", new AMF0Objects.AMF0Number() { Value = iVideoHeight });
+                        oInfo.AddToProperties("displayWidth", new AMF0Objects.AMF0Number() { Value = iVideoWidth });
+                        oInfo.AddToProperties("displayHeight", new AMF0Objects.AMF0Number() { Value = iVideoHeight });
+                        oInfo.AddToProperties("duration", new AMF0Objects.AMF0Number() { Value = 0 });
 
                         if (iVideoFPS != 0)
                         {
-                            MetaBody.Information.AddToProperties("framerate", new AMF0Objects.AMF0Number() { Value = iVideoFPS });
-                            MetaBody.Information.AddToProperties("fps", new AMF0Objects.AMF0Number() { Value = iVideoFPS });
+                            oInfo.AddToProperties("framerate", new AMF0Objects.AMF0Number() { Value = iVideoFPS });
+                            oInfo.AddToProperties("fps", new AMF0Objects.AMF0Number() { Value = iVideoFPS });
                         }
 
-                        MetaBody.Information.AddToProperties("videocodecid", new AMF0Objects.AMF0String() { Value = "avc1" });
+                        oInfo.AddToProperties("videocodecid", new AMF0Objects.AMF0String() { Value = "avc1" });
                     }
                 }
 
@@ -360,15 +361,15 @@ namespace RTMPLibrary
 
                         ACD.AACConfigDecode(iAACContent);
 
-                        MetaBody.Information.AddToProperties("audiocodecid", new AMF0Objects.AMF0String() { Value = "mp4a" });
-                        MetaBody.Information.AddToProperties("audiodatarate", new AMF0Objects.AMF0Number() { Value = 0 });
-                        MetaBody.Information.AddToProperties("audiosamplerate", new AMF0Objects.AMF0Number() { Value = ACD.sampleFrequency });
-                        MetaBody.Information.AddToProperties("audiosamplesize", new AMF0Objects.AMF0Number() { Value = 16 });
+                        oInfo.AddToProperties("audiocodecid", new AMF0Objects.AMF0String() { Value = "mp4a" });
+                        oInfo.AddToProperties("audiodatarate", new AMF0Objects.AMF0Number() { Value = 0 });
+                        oInfo.AddToProperties("audiosamplerate", new AMF0Objects.AMF0Number() { Value = ACD.sampleFrequency });
+                        oInfo.AddToProperties("audiosamplesize", new AMF0Objects.AMF0Number() { Value = 16 });
 
                         if (ACD.channelConfig >= 2)
-                            MetaBody.Information.AddToProperties("stereo", new AMF0Objects.AMF0Boolean() { Value = true });
+                            oInfo.AddToProperties("stereo", new AMF0Objects.AMF0Boolean() { Value = true });
                         else
-                            MetaBody.Information.AddToProperties("stereo", new AMF0Objects.AMF0Boolean() { Value = false });
+                            oInfo.AddToProperties("stereo", new AMF0Objects.AMF0Boolean() { Value = false });
                     }
                 }
 
