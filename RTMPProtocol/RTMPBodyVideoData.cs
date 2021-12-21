@@ -21,6 +21,7 @@ namespace RTMPLibrary
 
         public enum enumFrameType
         {
+            Unknow = 0,
             KeyFrame = 1,
             NonKeyFrame = 2
         }
